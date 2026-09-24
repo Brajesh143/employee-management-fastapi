@@ -48,18 +48,6 @@ class AttendanceBase(BaseModel):
             description="Attendance status"
         )
     ]
-    created_at: Annotated[
-        datetime,
-        Field(
-            description="Creation timestamp"
-        )
-    ]
-    updated_at: Annotated[
-        datetime,
-        Field(
-            description="Update timestamp"
-        )
-    ]
 
 class AttendanceCreate(AttendanceBase):
     pass
@@ -93,6 +81,10 @@ class AttendanceUpdate(BaseModel):
             description="Updated attendance status"
         )
     ]
+
+
+class AttendenceByEmployee(BaseModel):
+    employee_id: int
 
 class AttendanceResponse(AttendanceBase):
     id: int

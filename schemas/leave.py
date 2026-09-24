@@ -61,18 +61,6 @@ class LeaveBase(BaseModel):
             description="Approval timestamp"
         )
     ]
-    created_at: Annotated[
-        datetime,
-        Field(
-            description="Creation timestamp"
-        )
-    ]
-    updated_at: Annotated[
-        datetime,
-        Field(
-            description="Update timestamp"
-        )
-    ]
 
 class LeaveCreate(LeaveBase):
     pass

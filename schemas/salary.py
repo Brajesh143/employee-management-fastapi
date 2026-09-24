@@ -2,7 +2,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Annotated, Literal
 
-
 class SalaryBase(BaseModel):
     employee_id: Annotated[
         int,
@@ -82,18 +81,6 @@ class SalaryBase(BaseModel):
         Field(
             default=None,
             description="Payment date"
-        )
-    ]
-    created_at: Annotated[
-        datetime,
-        Field(
-            description="Creation timestamp"
-        )
-    ]
-    updated_at: Annotated[
-        datetime,
-        Field(
-            description="Update timestamp"
         )
     ]
 

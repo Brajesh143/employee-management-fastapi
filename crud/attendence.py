@@ -51,3 +51,6 @@ def delete_attendance(db: Session, attendance_id: int):
     db.commit()
 
     return db_attendance
+
+def get_employee_attendance(db: Session, employee_id: int):
+    return db.query(Attendance).filter(Attendance.employee_id == employee_id).all()
