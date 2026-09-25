@@ -43,8 +43,9 @@ class AttendanceBase(BaseModel):
         )
     ]
     status: Annotated[
-        Literal["Present","Absent","Half Day","Late","Work From Home","Holiday"],
+        Literal["Present","Absent","Half Day","Late","Work From Home","Holiday"] | None,
         Field(
+            default=None,
             description="Attendance status"
         )
     ]
