@@ -6,7 +6,7 @@ from database import Base, engine
 from models.department import Department  # noqa: F401
 from models.role import Role  # noqa: F401
 from models.employee import Employee  # noqa: F401
-from routers import department, role, employee, attendence, leave, salary, auth
+from routers import department, role, employee, attendence, leave, salary, auth, ai_chat
 
 Base.metadata.create_all(bind=engine)
 
@@ -56,4 +56,9 @@ app.include_router(
     auth.router,
     prefix="/auth",
     tags=["Authentication"]
+)
+
+app.include_router(
+    ai_chat.router,
+    prefix="/api/v1",
 )

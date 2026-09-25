@@ -9,9 +9,9 @@ def create_salary(db: Session, salary: SalaryCreate):
         year=salary.year,
         basic_salary=salary.basic_salary,
         hra=salary.hra,
-        allowances=salary.allowance,
+        allowance=salary.allowance,
         bonus=salary.bonus,
-        deductions=salary.deduction,
+        deduction=salary.deduction,
         tax=salary.tax,
         net_salary=salary.net_salary
     )
