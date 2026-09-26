@@ -42,6 +42,7 @@ class Employee(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    leave_balance = mapped_column(Float, default=20, nullable=False)
 
     department = relationship("Department", back_populates="employees")
     role = relationship("Role", back_populates="employees")

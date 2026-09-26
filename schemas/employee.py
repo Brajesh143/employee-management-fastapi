@@ -217,6 +217,7 @@ class EmployeeResponse(EmployeeBase):
     id: int
     is_active: bool
     last_login: datetime | None
+    leave_balance: float
     created_at: datetime
     updated_at: datetime
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Annotated, Literal
+from enum import Enum
 
 class LeaveBase(BaseModel):
     employee_id: Annotated[
@@ -106,4 +107,8 @@ class LeaveResponse(LeaveBase):
         "from_attributes": True
     }
 
+class LeaveStatus(str, Enum):
+    PENDING = "Pending"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
 

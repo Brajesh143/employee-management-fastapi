@@ -4,6 +4,7 @@ from database import get_db
 from auth.permissions import require_permission
 from schemas.leave import LeaveCreate, LeaveUpdate, LeaveResponse
 import crud.leave as crud
+from models.employee import Employee
 
 router = APIRouter()
 
@@ -102,3 +103,20 @@ def get_employee_leave(employee_id: int, db: Session = Depends(get_db)):
         )
 
     return leaves
+
+@router.put("/{leave_id}/{status}")
+def approve_leave_request(
+    leave_id: int,
+    status: str,
+    current_user: Employee = Depends(
+        require_permission("leave:approve")
+    ),
+    db: Session = Depends(get_db)
+):
+
+    return crud.approve_leave(
+        db=db,
+        leave_id=leave_id,
+        status=status,
+        approved_by=current_user.id
+    )

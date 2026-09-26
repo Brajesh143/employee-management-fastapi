@@ -190,6 +190,7 @@ def employees_page():
             first_name = st.text_input("First Name")
             last_name = st.text_input("Last Name")
             email = st.text_input("Email")
+            password = st.text_input("Password")
             employee_code = st.text_input("Employee Code")
             phone = st.text_input("Phone")
             department_id = st.number_input(
@@ -209,6 +210,7 @@ def employees_page():
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
+                "password": password,
                 "employee_code": employee_code,
                 "phone": phone,
                 "department_id": int(department_id),
