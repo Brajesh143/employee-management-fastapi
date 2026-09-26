@@ -43,7 +43,7 @@ ROLE_PERMISSIONS = {
         "salary:delete",
     ],
 
-    "HR": [
+    "Human Resource": [
         "employee:create",
         "employee:read",
         "employee:update",
@@ -81,57 +81,51 @@ ROLE_PERMISSIONS = {
     ],
 }
 
-
 def seed_role_permissions(db: Session):
 
-    all_permissions = {
-        permission.name: permission
-        for permission in db.query(Permission).all()
-    }
-
-    for role_name, permission_names in ROLE_PERMISSIONS.items():
-
-        role = (
-            db.query(Role)
-            .filter(Role.name == role_name)
-            .first()
+    try:
+        db.query(RolePermission).delete(
+            synchronize_session=False
         )
 
-        if role is None:
-            print(f"Role '{role_name}' not found.")
-            continue
+        all_permissions = {
+            permission.name: permission
+            for permission in db.query(Permission).all()
+        }
 
-        # Super Admin gets every permission
-        if "*" in permission_names:
-            permissions = all_permissions.values()
-        else:
-            permissions = [
-                all_permissions[name]
-                for name in permission_names
-                if name in all_permissions
-            ]
+        for role_name, permission_names in ROLE_PERMISSIONS.items():
 
-        for permission in permissions:
-
-            exists = (
-                db.query(RolePermission)
-                .filter(
-                    RolePermission.role_id == role.id,
-                    RolePermission.permission_id == permission.id,
-                )
+            role = (
+                db.query(Role)
+                .filter(Role.name == role_name)
                 .first()
             )
 
-            if exists:
+            if role is None:
+                print(f"Role '{role_name}' not found.")
                 continue
 
-            db.add(
-                RolePermission(
-                    role_id=role.id,
-                    permission_id=permission.id,
+            if "*" in permission_names:
+                permissions = all_permissions.values()
+            else:
+                permissions = [
+                    all_permissions[name]
+                    for name in permission_names
+                    if name in all_permissions
+                ]
+
+            for permission in permissions:
+                db.add(
+                    RolePermission(
+                        role_id=role.id,
+                        permission_id=permission.id,
+                    )
                 )
-            )
 
-    db.commit()
+        db.commit()
 
-    print("Role permissions seeded successfully.")
+        print("Role permissions seeded successfully.")
+
+    except Exception:
+        db.rollback()
+        raise

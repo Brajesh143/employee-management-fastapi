@@ -240,7 +240,7 @@ def attendance_page():
     if st.button("Fetch Attendance", type="primary"):
         records = api_request(
             "GET",
-            f"/attendences/employee/{int(employee_id)}",
+            f"/attendances/employee/{int(employee_id)}",
         )
 
         if records is not None:

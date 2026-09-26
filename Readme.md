@@ -72,3 +72,15 @@ For example:
             Generate professional performance review.
 
 AI Models: ollama pull gemma3:4b
+
+
+Employee:
+
+    Permissions: Able to see dahboard, with (attendance, leave balance, salary and profile), Able to see the attendenc and create attendance, able to see all leaves and create leaves
+
+
+HR:
+
+    Permission and action:
+        Able to see leaves, approve leaves, leave request
+
