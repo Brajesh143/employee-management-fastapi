@@ -46,3 +46,8 @@ def delete_salary(db: Session, salary_id: int):
     db.delete(db_salary)
     db.commit()
     return db_salary
+
+def get_my_salaries(db: Session, employee_id: int):
+    return db.query(Salary).filter(Salary.employee_id == employee_id).all()
+
+

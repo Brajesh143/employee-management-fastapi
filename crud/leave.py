@@ -3,14 +3,15 @@ from models.leave import Leave
 from schemas.leave import LeaveCreate, LeaveUpdate
 
 def create_leave(db: Session, leave: LeaveCreate):
+    print("=====", leave)
     db_leave = Leave(
         employee_id=leave.employee_id,
         leave_type=leave.leave_type,
         start_date=leave.start_date,
         end_date=leave.end_date,
-        total_days=leave.total_days,
+        total_days=calculate_total_days(leave.start_date, leave.end_date),
         reason=leave.reason,
-        status=leave.status,
+        status='Pending',
         approved_by=leave.approved_by,
         approved_at=leave.approved_at
     )
@@ -52,3 +53,12 @@ def delete_leave(db: Session, leave_id: int):
     db.commit()
 
     return db_leave
+
+def get_my_leaves(db: Session, employee_id: int):
+    return db.query(Leave).filter(Leave.employee_id == employee_id).all()
+
+def calculate_total_days(start_date, end_date):
+    if not start_date or not end_date:
+        return 0
+
+    return (end_date - start_date).days + 1

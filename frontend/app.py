@@ -240,7 +240,7 @@ def attendance_page():
     if st.button("Fetch Attendance", type="primary"):
         records = api_request(
             "GET",
-            f"/attendances/employee/{int(employee_id)}",
+            f"/attendences/employee/{int(employee_id)}",
         )
 
         if records is not None:
@@ -272,14 +272,20 @@ def leave_page():
         )
 
         if st.button("Fetch Leave Balance"):
-            employee = api_request(
+            leaves = api_request(
                 "GET",
-                f"/employees/{int(employee_id)}",
+                f"/leaves/employee/{int(employee_id)}",
             )
 
-            if employee is not None:
-                balance = employee.get("leave_balance", 0)
-                st.metric("Available Leave Balance", balance)
+            if leaves is not None:
+                if leaves:
+                    st.dataframe(
+                        pd.DataFrame(leaves),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("No leave records found.")
 
     with tab2:
         st.subheader("Submit Leave Request")
@@ -292,6 +298,18 @@ def leave_page():
                 key="request_employee_id",
             )
 
+            leave_type = st.selectbox(
+                "Leave Type",
+                [
+                    "Casual",
+                    "Sick",
+                    "Earned",
+                    "Maternity",
+                    "Paternity",
+                ],
+                index=None,
+                placeholder="Select leave type",
+            )
             start_date = st.date_input("Start Date")
             end_date = st.date_input("End Date")
             reason = st.text_area("Reason")
@@ -307,6 +325,7 @@ def leave_page():
             else:
                 payload = {
                     "employee_id": int(employee_id),
+                    "leave_type": leave_type,
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
                     "reason": reason,
@@ -321,6 +340,92 @@ def leave_page():
                 if result is not None:
                     st.success("Leave request submitted.")
 
+
+# -----------------Salary Page -----------------
+
+def salary_page():
+    st.title("$ Salary Management")
+
+    tab1, tab2 = st.tabs(
+        ["Salary List", "Create Salary"]
+    )
+
+    with tab1:
+        employee_id = st.number_input(
+            "Employee ID",
+            min_value=1,
+            step=1,
+            key="salary_employee_id",
+        )
+
+        if st.button("Fetch Salary List"):
+            salaries = api_request(
+                "GET",
+                f"/salaries/employee/{int(employee_id)}",
+            )
+
+            if salaries is not None:
+                if salaries:
+                    st.dataframe(
+                        pd.DataFrame(salaries),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("No Salary records found.")
+
+    with tab2:
+        st.subheader("Submit Leave Request")
+
+        with st.form("leave_request_form"):
+            employee_id = st.number_input(
+                "Employee ID",
+                min_value=1,
+                step=1,
+                key="request_employee_id",
+            )
+
+            leave_type = st.selectbox(
+                "Leave Type",
+                [
+                    "Casual",
+                    "Sick",
+                    "Earned",
+                    "Maternity",
+                    "Paternity",
+                ],
+                index=None,
+                placeholder="Select leave type",
+            )
+            start_date = st.date_input("Start Date")
+            end_date = st.date_input("End Date")
+            reason = st.text_area("Reason")
+
+            submitted = st.form_submit_button(
+                "Submit Leave Request",
+                type="primary",
+            )
+
+        if submitted:
+            if end_date < start_date:
+                st.error("End date cannot be before start date.")
+            else:
+                payload = {
+                    "employee_id": int(employee_id),
+                    "leave_type": leave_type,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "reason": reason,
+                }
+
+                result = api_request(
+                    "POST",
+                    "/leaves/",
+                    json=payload,
+                )
+
+                if result is not None:
+                    st.success("Leave request submitted.")
 
 # ---------------- AI ASSISTANT ----------------
 
@@ -396,6 +501,7 @@ def main():
                 "Employees",
                 "Attendance",
                 "Leave Management",
+                "Salary Management",
                 "AI Assistant",
             ],
         )
@@ -416,6 +522,8 @@ def main():
         attendance_page()
     elif page == "Leave Management":
         leave_page()
+    elif page == "Salary Management":
+        salary_page()
     elif page == "AI Assistant":
         ai_assistant_page()
 

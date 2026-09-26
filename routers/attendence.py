@@ -86,7 +86,7 @@ def delete_attendance(attendance_id: int, db: Session = Depends(get_db)):
     dependencies=[Depends(require_permission("attendance:read"))]
 )
 def get_employee_attendence(employee_id: int, db: Session = Depends(get_db)):
-    print("employeeid====", employee_id)
+
     attendance = crud.get_employee_attendance(db, employee_id)
     
     if not attendance:

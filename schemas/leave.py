@@ -30,6 +30,7 @@ class LeaveBase(BaseModel):
     total_days: Annotated[
         float,
         Field(
+            default=0.00,
             description="Total days of leave"
         )
     ]

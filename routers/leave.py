@@ -85,3 +85,20 @@ def delete_leave(
         )
 
     return deleted_leave
+
+@router.get(
+    "/employee/{employee_id}",
+    response_model=list[LeaveResponse],
+    dependencies=[Depends(require_permission("leave:read"))]
+)
+def get_employee_leave(employee_id: int, db: Session = Depends(get_db)):
+
+    leaves = crud.get_my_leaves(db, employee_id)
+    
+    if not leaves:
+        raise HTTPException(
+            status_code=404,
+            detail="Leave record not found"
+        )
+
+    return leaves

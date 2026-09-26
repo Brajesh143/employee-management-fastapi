@@ -86,3 +86,20 @@ def delete_salary(
         )
 
     return deleted_salary
+
+@router.get(
+    "/employee/{employee_id}",
+    response_model=list[SalaryResponse],
+    dependencies=[Depends(require_permission("salary:read"))]
+)
+def get_employee_salary(employee_id: int, db: Session = Depends(get_db)):
+
+    salaries = crud.get_my_salaries(db, employee_id)
+    
+    if not salaries:
+        raise HTTPException(
+            status_code=404,
+            detail="Salary record not found"
+        )
+
+    return salaries
