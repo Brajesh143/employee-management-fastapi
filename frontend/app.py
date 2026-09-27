@@ -45,7 +45,7 @@ def api_request(method, endpoint, **kwargs):
             method=method,
             url=f"{API_BASE_URL}{endpoint}",
             headers=headers,
-            timeout=20,
+            timeout=180,
             **kwargs,
         )
 

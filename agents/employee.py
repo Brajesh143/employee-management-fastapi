@@ -15,6 +15,7 @@ def create_employee_agent(
 
     llm = get_llm()
 
+    print("create agent tools call")
     tools = create_employee_tools(
         db=db,
         employee_id=employee_id,

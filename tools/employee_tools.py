@@ -14,7 +14,7 @@ def create_employee_tools(
     """
     Create tools scoped to the authenticated employee.
     """
-
+    print("I am in agent tool")
     @tool
     def get_my_attendance(month: int, year: int) -> list[dict]:
         """
@@ -107,7 +107,8 @@ def create_employee_tools(
             "department": employee.department.name,
             "gender": employee.gender,
             "address": employee.address,
-            "status": employee.status
+            "status": employee.status,
+            "leave_balance": employee.leave_balance
         }
 
     return [
