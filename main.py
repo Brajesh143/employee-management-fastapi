@@ -7,8 +7,11 @@ from models.department import Department  # noqa: F401
 from models.role import Role  # noqa: F401
 from models.employee import Employee  # noqa: F401
 from routers import department, role, employee, attendence, leave, salary, auth, ai_chat
+from core.logging_config import setup_logging
 
 Base.metadata.create_all(bind=engine)
+
+setup_logging()
 
 app = FastAPI()
 
