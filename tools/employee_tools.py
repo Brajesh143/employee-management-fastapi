@@ -56,6 +56,9 @@ def create_employee_tools(
             {
                 "date": str(record.attendance_date),
                 "status": record.status,
+                "work_mode": getattr(record, "work_mode", "office"),
+                "late_minutes": getattr(record, "late_minutes", 0),
+                "working_hours": record.working_hours,
             }
             for record in records
         ]

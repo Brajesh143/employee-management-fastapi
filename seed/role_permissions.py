@@ -30,6 +30,8 @@ ROLE_PERMISSIONS = {
         "attendance:read",
         "attendance:update",
         "attendance:delete",
+        "attendance:correct",
+        "attendance:wfh",
 
         "leave:create",
         "leave:read",
@@ -41,6 +43,8 @@ ROLE_PERMISSIONS = {
         "salary:read",
         "salary:update",
         "salary:delete",
+
+        "report:read",
     ],
 
     "Human Resource": [
@@ -53,25 +57,35 @@ ROLE_PERMISSIONS = {
         "attendance:create",
         "attendance:read",
         "attendance:update",
+        "attendance:correct",
+        "attendance:wfh",
 
         "leave:read",
         "leave:approve",
 
         "salary:read",
+
+        "report:read",
     ],
 
     "Manager": [
         "employee:read",
 
+        "attendance:create",
         "attendance:read",
+        "attendance:correct",
+        "attendance:wfh",
 
         "leave:read",
         "leave:approve",
 
         "salary:read",
+
+        "report:read",
     ],
 
     "Employee": [
+        "attendance:create",
         "attendance:read",
 
         "leave:create",

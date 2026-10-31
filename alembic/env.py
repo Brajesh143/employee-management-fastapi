@@ -12,6 +12,13 @@ from models.employee import Employee
 from models.attendence import Attendance
 from models.leave import Leave
 from models.salary import Salary
+from models.shift import Shift
+from models.holiday import Holiday
+from models.attendance_policy import AttendancePolicy
+from models.wfh_request import WfhRequest
+from models.attendance_correction import AttendanceCorrection
+from models.audit_log import AuditLog
+from models.notification import Notification
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

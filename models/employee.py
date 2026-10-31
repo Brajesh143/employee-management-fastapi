@@ -23,6 +23,12 @@ class Employee(Base):
         ForeignKey("departments.id"), nullable=True, index=True
     )
     role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id"), nullable=True, index=True)
+    reporting_manager_id: Mapped[int | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True, index=True
+    )
+    shift_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shifts.id"), nullable=True, index=True
+    )
 
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     salary: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -46,6 +52,12 @@ class Employee(Base):
 
     department = relationship("Department", back_populates="employees")
     role = relationship("Role", back_populates="employees")
+    shift = relationship("Shift", back_populates="employees")
+    reporting_manager = relationship(
+        "Employee",
+        remote_side="Employee.id",
+        foreign_keys=[reporting_manager_id],
+    )
     leaves = relationship(
         "Leave",
         back_populates="employee",

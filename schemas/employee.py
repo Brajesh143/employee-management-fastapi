@@ -90,6 +90,22 @@ class EmployeeBase(BaseModel):
         )
     ]
 
+    reporting_manager_id: Annotated[
+        int | None,
+        Field(
+            default=None,
+            description="ID of the reporting manager"
+        )
+    ]
+
+    shift_id: Annotated[
+        int | None,
+        Field(
+            default=None,
+            description="Assigned shift ID"
+        )
+    ]
+
     address: Annotated[
         str | None,
         Field(
@@ -189,6 +205,16 @@ class EmployeeUpdate(BaseModel):
     ]
 
     role_id: Annotated[
+        int | None,
+        Field(default=None)
+    ]
+
+    reporting_manager_id: Annotated[
+        int | None,
+        Field(default=None)
+    ]
+
+    shift_id: Annotated[
         int | None,
         Field(default=None)
     ]

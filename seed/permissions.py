@@ -80,6 +80,14 @@ DEFAULT_PERMISSIONS = [
         "name": "attendance:delete",
         "description": "Delete attendance"
     },
+    {
+        "name": "attendance:correct",
+        "description": "Approve or reject attendance corrections"
+    },
+    {
+        "name": "attendance:wfh",
+        "description": "Approve or reject work-from-home requests"
+    },
 
     # Leave
     {
@@ -119,6 +127,12 @@ DEFAULT_PERMISSIONS = [
     {
         "name": "salary:delete",
         "description": "Delete salary"
+    },
+
+    # Reports
+    {
+        "name": "report:read",
+        "description": "View attendance and HR reports"
     }
 ]
 

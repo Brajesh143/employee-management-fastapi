@@ -16,6 +16,8 @@ def create_employee(db: Session, employee: EmployeeCreate):
         joining_date=employee.joining_date,
         department_id=employee.department_id,
         role_id=employee.role_id,
+        reporting_manager_id=employee.reporting_manager_id,
+        shift_id=employee.shift_id,
         address=employee.address,
         salary=employee.salary,
         profile_image=employee.profile_image,
