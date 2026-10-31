@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PermissionBase(BaseModel):
@@ -14,6 +14,22 @@ class PermissionBase(BaseModel):
             description="Permission name"
         )
     ]
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, name: str) -> str:
+        normalized = name.strip().lower()
+        if not normalized or any(not part for part in normalized.split(":")):
+            raise ValueError("Permission names must use non-empty colon-separated parts.")
+        if not all(
+            part.replace("_", "").isalnum() and part[0].isalpha()
+            for part in normalized.split(":")
+        ):
+            raise ValueError(
+                "Permission names may contain lowercase letters, digits, "
+                "underscores, and colons."
+            )
+        return normalized
 
     description: Annotated[
         str | None,
@@ -39,6 +55,24 @@ class PermissionUpdate(BaseModel):
             max_length=100
         )
     ]
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, name: str | None) -> str | None:
+        if name is None:
+            return None
+        normalized = name.strip().lower()
+        if not normalized or any(not part for part in normalized.split(":")):
+            raise ValueError("Permission names must use non-empty colon-separated parts.")
+        if not all(
+            part.replace("_", "").isalnum() and part[0].isalpha()
+            for part in normalized.split(":")
+        ):
+            raise ValueError(
+                "Permission names may contain lowercase letters, digits, "
+                "underscores, and colons."
+            )
+        return normalized
 
     description: Annotated[
         str | None,

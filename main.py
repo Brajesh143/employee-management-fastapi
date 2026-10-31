@@ -15,6 +15,7 @@ from routers import (
     department,
     designation,
     role,
+    permission,
     employee,
     attendence,
     leave,
@@ -64,6 +65,12 @@ app.include_router(
     role.router,
     prefix="/roles",
     tags=["Role"]
+)
+
+app.include_router(
+    permission.router,
+    prefix="/permissions",
+    tags=["Permission Management"],
 )
 
 app.include_router(

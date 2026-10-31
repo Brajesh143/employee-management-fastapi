@@ -119,6 +119,13 @@ document upload and download, CSV import dry-run preview, designation
 management, and soft-exit recording. Access to each action is enforced by the
 backend role permissions.
 
+Permission catalog administration is available under `/permissions` and
+requires `permission:manage`. Role permission assignments can be inspected with
+`GET /permissions/roles/{role_id}/permissions` and replaced with
+`PUT /permissions/roles/{role_id}/permissions` by users with `role:assign`.
+Super Admin always retains every permission; newly created permission
+definitions are automatically assigned to Super Admin roles.
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

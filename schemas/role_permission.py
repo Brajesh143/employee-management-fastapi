@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Annotated
 
 
@@ -28,3 +28,18 @@ class RolePermissionResponse(RolePermissionCreate):
     model_config = {
         "from_attributes": True
     }
+
+
+class RolePermissionUpdate(BaseModel):
+    permission_ids: list[int] = Field(
+        description="Complete set of permission IDs to assign to this role."
+    )
+
+    @field_validator("permission_ids")
+    @classmethod
+    def validate_permission_ids(cls, permission_ids: list[int]) -> list[int]:
+        if any(permission_id <= 0 for permission_id in permission_ids):
+            raise ValueError("Permission IDs must be positive.")
+        if len(permission_ids) != len(set(permission_ids)):
+            raise ValueError("Permission IDs must not contain duplicates.")
+        return permission_ids

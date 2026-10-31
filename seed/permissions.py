@@ -91,6 +91,10 @@ DEFAULT_PERMISSIONS = [
         "name": "role:assign",
         "description": "Assign roles with delegated permissions to employees"
     },
+    {
+        "name": "permission:manage",
+        "description": "Create, update, and delete permission definitions"
+    },
 
     # Attendance
     {
