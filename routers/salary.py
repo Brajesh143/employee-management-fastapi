@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from auth.dependencies import get_current_user
+from auth.permissions import has_permission, require_any_permission, require_permission
 from database import get_db
 from auth.permissions import require_permission
 from schemas.leave import LeaveCreate, LeaveUpdate, LeaveResponse
@@ -90,9 +92,15 @@ def delete_salary(
 @router.get(
     "/employee/{employee_id}",
     response_model=list[SalaryResponse],
-    dependencies=[Depends(require_permission("salary:read"))]
+    dependencies=[Depends(require_any_permission("salary:read", "payslip:read"))]
 )
-def get_employee_salary(employee_id: int, db: Session = Depends(get_db)):
+def get_employee_salary(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not has_permission(db, current_user, "salary:read") and employee_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Salary record not found")
 
     salaries = crud.get_my_salaries(db, employee_id)
     

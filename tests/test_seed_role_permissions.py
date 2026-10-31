@@ -42,6 +42,10 @@ def test_seed_roles_and_permissions_creates_catalog_and_preserves_custom_roles()
             name for (name,) in db.query(Permission.name).all()
         }
         assert permissions_for("Super Admin") == all_permission_names
+        assert "employee:read:all" in permissions_for("HR")
+        assert "employee:team:read" in permissions_for("Manager")
+        assert "attendance:manage" not in permissions_for("Employee")
+        assert "role:assign" in permissions_for("Admin")
         assert "recruitment:manage" in permissions_for("HR")
         assert "expense:approve" in permissions_for("HR")
         assert "performance:review" in permissions_for("Manager")

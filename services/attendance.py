@@ -14,7 +14,6 @@ from models.wfh_request import WfhRequest
 from services.audit import write_audit_log
 from services.notifications import notify
 
-ORG_ROLES = {"Super Admin", "Admin", "HR", "Human Resource"}
 WORK_MODES = {"office", "wfh"}
 
 
@@ -54,18 +53,19 @@ def get_permission_names(db: Session, user: Employee) -> set[str]:
     return {name for (name,) in rows}
 
 
-def role_name(user: Employee) -> str:
-    return getattr(user.role, "name", "") or ""
+def is_org_admin(db: Session, user: Employee) -> bool:
+    permissions = get_permission_names(db, user)
+    return "*" in permissions or "employee:read:all" in permissions
 
 
-def is_org_admin(user: Employee) -> bool:
-    return role_name(user) in ORG_ROLES
-
-
-def can_review_employee(reviewer: Employee, employee: Employee) -> bool:
+def can_review_employee(
+    db: Session,
+    reviewer: Employee,
+    employee: Employee,
+) -> bool:
     if reviewer.id == employee.reporting_manager_id:
         return True
-    return is_org_admin(reviewer)
+    return is_org_admin(db, reviewer)
 
 
 def get_or_create_default_shift(db: Session) -> Shift:
@@ -395,7 +395,7 @@ def review_wfh_request(
         )
 
     employee = db.query(Employee).filter(Employee.id == request.employee_id).first()
-    if employee is None or not can_review_employee(reviewer, employee):
+    if employee is None or not can_review_employee(db, reviewer, employee):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You cannot review this WFH request.",
@@ -537,7 +537,7 @@ def review_correction(
         )
 
     employee = db.query(Employee).filter(Employee.id == correction.employee_id).first()
-    if employee is None or not can_review_employee(reviewer, employee):
+    if employee is None or not can_review_employee(db, reviewer, employee):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You cannot review this correction.",
@@ -599,8 +599,8 @@ def review_correction(
 
 def list_wfh_requests(db: Session, user: Employee, status_filter: str | None = None):
     query = db.query(WfhRequest)
-    if not is_org_admin(user):
-        if role_name(user) == "Manager":
+    if not is_org_admin(db, user):
+        if "employee:team:read" in get_permission_names(db, user):
             team_ids = [
                 row[0]
                 for row in db.query(Employee.id)
@@ -619,8 +619,8 @@ def list_wfh_requests(db: Session, user: Employee, status_filter: str | None = N
 
 def list_corrections(db: Session, user: Employee, status_filter: str | None = None):
     query = db.query(AttendanceCorrection)
-    if not is_org_admin(user):
-        if role_name(user) == "Manager":
+    if not is_org_admin(db, user):
+        if "employee:team:read" in get_permission_names(db, user):
             team_ids = [
                 row[0]
                 for row in db.query(Employee.id)
@@ -711,9 +711,9 @@ def build_attendance_report(
     if department_id is not None:
         employees_query = employees_query.filter(Employee.department_id == department_id)
 
-    if is_org_admin(user):
+    if is_org_admin(db, user):
         employees = employees_query.all()
-    elif role_name(user) == "Manager":
+    elif "employee:team:read" in get_permission_names(db, user):
         employees = employees_query.filter(
             Employee.reporting_manager_id == user.id
         ).all()

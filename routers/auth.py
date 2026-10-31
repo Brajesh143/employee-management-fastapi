@@ -10,6 +10,7 @@ from schemas.auth import (
     Token,
     ChangePassword,
 )
+from schemas.employee import EmployeeResponse
 
 router = APIRouter()
 
@@ -57,6 +58,7 @@ def logout(
 
 @router.get(
     "/me",
+    response_model=EmployeeResponse,
     summary="Get Current Employee"
 )
 def get_current_employee(

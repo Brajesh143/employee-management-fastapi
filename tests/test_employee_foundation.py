@@ -78,6 +78,7 @@ def employee_api(tmp_path, monkeypatch):
             Permission(name=name, description="Test permission")
             for name in (
                 "employee:read",
+                "employee:read:all",
                 "employee:create",
                 "employee:export",
                 "employee:import",
@@ -546,6 +547,24 @@ def test_employee_document_and_soft_exit_api(employee_api):
 def test_manager_employee_api_is_limited_to_direct_reports(employee_api):
     client, engine, test_user = employee_api
     with Session(engine) as db:
+        global_read = (
+            db.query(Permission)
+            .filter(Permission.name == "employee:read:all")
+            .one()
+        )
+        db.query(RolePermission).filter(
+            RolePermission.role_id == test_user.role_id,
+            RolePermission.permission_id == global_read.id,
+        ).delete()
+        team_read = Permission(name="employee:team:read")
+        db.add(team_read)
+        db.flush()
+        db.add(
+            RolePermission(
+                role_id=test_user.role_id,
+                permission_id=team_read.id,
+            )
+        )
         manager = add_employee(db, "MGR001")
         report = add_employee(
             db,

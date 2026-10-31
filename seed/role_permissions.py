@@ -13,6 +13,7 @@ ROLE_PERMISSIONS = {
     "Admin": [
         "employee:create",
         "employee:read",
+        "employee:read:all",
         "employee:update",
         "employee:delete",
         "employee:import",
@@ -28,8 +29,10 @@ ROLE_PERMISSIONS = {
         "role:read",
         "role:update",
         "role:delete",
+        "role:assign",
 
         "attendance:create",
+        "attendance:manage",
         "attendance:read",
         "attendance:update",
         "attendance:delete",
@@ -68,6 +71,7 @@ ROLE_PERMISSIONS = {
     "HR": [
         "employee:create",
         "employee:read",
+        "employee:read:all",
         "employee:update",
         "employee:import",
         "employee:export",
@@ -76,6 +80,7 @@ ROLE_PERMISSIONS = {
         "department:read",
 
         "attendance:create",
+        "attendance:manage",
         "attendance:read",
         "attendance:update",
         "attendance:correct",
@@ -101,12 +106,14 @@ ROLE_PERMISSIONS = {
     "Human Resource": [
         "employee:create",
         "employee:read",
+        "employee:read:all",
         "employee:update",
         "employee:import",
         "employee:export",
         "document:manage",
         "department:read",
         "attendance:create",
+        "attendance:manage",
         "attendance:read",
         "attendance:update",
         "attendance:correct",
@@ -127,6 +134,7 @@ ROLE_PERMISSIONS = {
 
     "Manager": [
         "employee:read",
+        "employee:team:read",
 
         "attendance:create",
         "attendance:read",

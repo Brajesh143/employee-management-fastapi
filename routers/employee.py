@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from auth.permissions import require_permission
+from auth.permissions import (
+    can_access_employee,
+    ensure_role_assignment_allowed,
+    has_permission,
+    require_permission,
+)
 from models.employee import Employee
 from schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeResponse
 from schemas.employee_csv import EmployeeImportPreview
@@ -31,10 +36,11 @@ router = APIRouter()
 
 
 def _scope_to_reporting_team(
+    db: Session,
     current_user: Employee,
     reporting_manager_id: int | None,
 ) -> int | None:
-    if getattr(current_user.role, "name", None) != "Manager":
+    if not has_permission(db, current_user, "employee:team:read"):
         return reporting_manager_id
     if reporting_manager_id not in (None, current_user.id):
         raise HTTPException(
@@ -57,6 +63,7 @@ def create_employee_api(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    ensure_role_assignment_allowed(db, current_user, employee.role_id)
 
     try:
         return crud.create_employee(db, employee)
@@ -87,6 +94,7 @@ def get_employees(
     sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
 ):
     reporting_manager_id = _scope_to_reporting_team(
+        db,
         current_user,
         reporting_manager_id,
     )
@@ -312,11 +320,7 @@ def get_employee(
             detail="Employee not found"
         )
 
-    if (
-        getattr(current_user.role, "name", None) == "Manager"
-        and employee.id != current_user.id
-        and employee.reporting_manager_id != current_user.id
-    ):
+    if not can_access_employee(db, current_user, employee.id):
         raise HTTPException(status_code=404, detail="Employee not found")
 
     return employee
@@ -329,8 +333,12 @@ def get_employee(
 def update_employee(
     employee_id: int,
     employee: EmployeeUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
+    if "role_id" in employee.model_fields_set:
+        ensure_role_assignment_allowed(db, current_user, employee.role_id)
+
     try:
         updated_employee = crud.update_employee(employee_id, employee, db)
     except ValueError as error:

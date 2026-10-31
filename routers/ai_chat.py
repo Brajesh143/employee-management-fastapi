@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from agents.callbacks import AgentLoggingCallback
 from database import get_db
-from auth.dependencies import get_current_user
+from auth.permissions import require_permission
 
 from agents.employee import create_employee_agent
 from schemas.ai_chat import ChatRequest, ChatResponse
@@ -22,7 +22,7 @@ logger = logging.getLogger("agent")
 def employee_ai_chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("ai:chat")),
 ):
     request_id = str(uuid.uuid4())
     start_time = time.perf_counter()

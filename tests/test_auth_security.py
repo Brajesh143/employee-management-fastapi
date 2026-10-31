@@ -185,7 +185,9 @@ def test_logout_endpoint_revokes_token_for_following_requests(
             token = login_response.json()["access_token"]
             headers = {"Authorization": f"Bearer {token}"}
 
-            assert client.get("/auth/me", headers=headers).status_code == 200
+            current_user_response = client.get("/auth/me", headers=headers)
+            assert current_user_response.status_code == 200
+            assert "password_hash" not in current_user_response.json()
             assert client.post("/auth/logout", headers=headers).status_code == 204
             assert client.get("/auth/me", headers=headers).status_code == 401
     finally:

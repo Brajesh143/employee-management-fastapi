@@ -22,6 +22,14 @@ DEFAULT_PERMISSIONS = [
         "description": "View employee"
     },
     {
+        "name": "employee:read:all",
+        "description": "View employee records across the organization"
+    },
+    {
+        "name": "employee:team:read",
+        "description": "View employee records for direct reports"
+    },
+    {
         "name": "employee:update",
         "description": "Update employee"
     },
@@ -79,11 +87,19 @@ DEFAULT_PERMISSIONS = [
         "name": "role:delete",
         "description": "Delete role"
     },
+    {
+        "name": "role:assign",
+        "description": "Assign roles with delegated permissions to employees"
+    },
 
     # Attendance
     {
         "name": "attendance:create",
         "description": "Mark attendance"
+    },
+    {
+        "name": "attendance:manage",
+        "description": "Create or manage attendance records outside self-service check-in"
     },
     {
         "name": "attendance:read",

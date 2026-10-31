@@ -1,6 +1,20 @@
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+from models.employee import Employee
 from models.role import Role
 from schemas.role import RoleCreate, RoleUpdate
+
+SYSTEM_ROLE_NAMES = {
+    "Super Admin",
+    "Admin",
+    "HR",
+    "Human Resource",
+    "Manager",
+    "Finance",
+    "Employee",
+    "Recruiter",
+}
+
 
 def create_role(db: Session, role: RoleCreate):
 
@@ -34,14 +48,18 @@ def update_role(db: Session, role_id: int, role: RoleUpdate):
     if not db_role:
         return None
 
-    # db_role.name = role.name
-    # db_role.description = role.description
-
     update_data = role.model_dump(exclude_unset=True)
+    if (
+        db_role.name in SYSTEM_ROLE_NAMES
+        and update_data.get("name", db_role.name) != db_role.name
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Default system role names cannot be changed.",
+        )
 
     for key, value in update_data.items():
         setattr(db_role, key, value)
-
 
     db.commit()
     db.refresh(db_role)
@@ -54,6 +72,22 @@ def delete_role(db: Session, role_id: int):
 
     if not db_role:
         return None
+
+    if db_role.name in SYSTEM_ROLE_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Default system roles cannot be deleted.",
+        )
+
+    if (
+        db.query(Employee.id)
+        .filter(Employee.role_id == db_role.id)
+        .first()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Roles assigned to employees cannot be deleted.",
+        )
 
     db.delete(db_role)
     db.commit()

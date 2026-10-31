@@ -2,7 +2,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
-from auth.permissions import require_permission
+from auth.permissions import employee_scope_query, has_permission, require_permission
 from database import get_db
 from models.attendence import Attendance
 from models.employee import Employee
@@ -258,19 +258,31 @@ def reject_correction(
     response_model=list[AttendanceResponse],
     dependencies=[Depends(require_permission("attendance:read"))],
 )
-def get_employee_attendence(employee_id: int, db: Session = Depends(get_db)):
-    return crud.get_employee_attendance(db, employee_id)
+def get_employee_attendence(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    return employee_scope_query(
+        db,
+        current_user,
+        db.query(Attendance),
+        Attendance.employee_id,
+    ).filter(Attendance.employee_id == employee_id).all()
 
 
 @router.post(
     "/",
     response_model=AttendanceResponse,
-    dependencies=[Depends(require_permission("attendance:create"))],
+    dependencies=[Depends(require_permission("attendance:manage"))],
 )
 def create_attendance(
     attendance: AttendanceCreate,
     db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
+    if not has_permission(db, current_user, "employee:read:all"):
+        attendance = attendance.model_copy(update={"employee_id": current_user.id})
     return crud.create_attendance(db, attendance)
 
 
@@ -279,8 +291,16 @@ def create_attendance(
     response_model=list[AttendanceResponse],
     dependencies=[Depends(require_permission("attendance:read"))],
 )
-def get_attendances(db: Session = Depends(get_db)):
-    return crud.get_attendances(db)
+def get_attendances(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    return employee_scope_query(
+        db,
+        current_user,
+        db.query(Attendance),
+        Attendance.employee_id,
+    ).all()
 
 
 @router.get(
@@ -288,8 +308,17 @@ def get_attendances(db: Session = Depends(get_db)):
     response_model=AttendanceResponse,
     dependencies=[Depends(require_permission("attendance:read"))],
 )
-def get_attendance(attendance_id: int, db: Session = Depends(get_db)):
-    attendance = crud.get_attendance(db, attendance_id)
+def get_attendance(
+    attendance_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    attendance = employee_scope_query(
+        db,
+        current_user,
+        db.query(Attendance),
+        Attendance.employee_id,
+    ).filter(Attendance.id == attendance_id).first()
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return attendance
@@ -304,7 +333,17 @@ def update_attendance(
     attendance_id: int,
     attendance: AttendanceUpdate,
     db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
+    existing = employee_scope_query(
+        db,
+        current_user,
+        db.query(Attendance),
+        Attendance.employee_id,
+    ).filter(Attendance.id == attendance_id).first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+
     updated_attendance = crud.update_attendance(db, attendance_id, attendance)
     if not updated_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
@@ -316,7 +355,20 @@ def update_attendance(
     response_model=AttendanceResponse,
     dependencies=[Depends(require_permission("attendance:delete"))],
 )
-def delete_attendance(attendance_id: int, db: Session = Depends(get_db)):
+def delete_attendance(
+    attendance_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    existing = employee_scope_query(
+        db,
+        current_user,
+        db.query(Attendance),
+        Attendance.employee_id,
+    ).filter(Attendance.id == attendance_id).first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+
     deleted_attendance = crud.delete_attendance(db, attendance_id)
     if not deleted_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")

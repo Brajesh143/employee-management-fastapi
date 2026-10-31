@@ -6,7 +6,6 @@ from fastapi import HTTPException
 from datetime import datetime
 
 def create_leave(db: Session, leave: LeaveCreate):
-    print("=====", leave)
     db_leave = Leave(
         employee_id=leave.employee_id,
         leave_type=leave.leave_type,
@@ -15,8 +14,8 @@ def create_leave(db: Session, leave: LeaveCreate):
         total_days=calculate_total_days(leave.start_date, leave.end_date),
         reason=leave.reason,
         status='Pending',
-        approved_by=leave.approved_by,
-        approved_at=leave.approved_at
+        approved_by=None,
+        approved_at=None,
     )
     db.add(db_leave)
     db.commit()
