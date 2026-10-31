@@ -5,7 +5,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-from frontend.employee_management import render_employee_management
+from employee_management import render_employee_management
 
 load_dotenv()
 
@@ -37,6 +37,7 @@ def api_request(method, endpoint, **kwargs):
 
     headers = kwargs.pop("headers", {})
     return_response = kwargs.pop("return_response", False)
+    handle_unauthorized = kwargs.pop("handle_unauthorized", True)
 
     if st.session_state.token:
         headers["Authorization"] = (
@@ -52,7 +53,7 @@ def api_request(method, endpoint, **kwargs):
             **kwargs,
         )
 
-        if response.status_code == 401:
+        if response.status_code == 401 and handle_unauthorized:
             st.session_state.token = None
             st.session_state.user = None
             st.error("Session expired. Please log in again.")
@@ -445,6 +446,11 @@ def main():
         st.divider()
 
         if st.button("🚪 Logout", use_container_width=True):
+            api_request(
+                "POST",
+                "/auth/logout",
+                handle_unauthorized=False,
+            )
             st.session_state.token = None
             st.session_state.user = None
             st.session_state.chat_history = []

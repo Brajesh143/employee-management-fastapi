@@ -21,6 +21,7 @@ from models.wfh_request import WfhRequest
 from models.attendance_correction import AttendanceCorrection
 from models.audit_log import AuditLog
 from models.notification import Notification
+from models.revoked_token import RevokedToken
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

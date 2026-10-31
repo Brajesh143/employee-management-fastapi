@@ -90,10 +90,21 @@ Start the FastAPI backend, apply the database migrations, and seed roles and
 permissions before launching the Streamlit frontend:
 
 ```bash
+# Run once. Append to an existing .env rather than replacing its other settings.
+printf '\nJWT_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
 ./myenv/bin/alembic upgrade head
 ./myenv/bin/python seed/run_seed.py
 ./myenv/bin/uvicorn main:app --reload
 ```
+
+Keep the generated `JWT_SECRET_KEY` private and stable across backend restarts
+and workers. The API rejects missing or shorter-than-32-byte signing keys.
+Access tokens expire after 30 minutes. Logging out revokes the active token;
+changing a password invalidates all previously issued tokens for that account.
+Existing access tokens must be refreshed by signing in again after this update.
+New passwords are stored with bcrypt. Existing salted SHA-256 password hashes
+for passwords up to 72 UTF-8 bytes are upgraded to bcrypt on successful login;
+longer legacy passwords remain verifiable until changed.
 
 In another terminal:
 

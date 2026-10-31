@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from auth.hashing import Hash
 from auth.jwt import JWTHandler
 from models.employee import Employee
+from models.revoked_token import RevokedToken
 from schemas.auth import LoginRequest, ChangePassword
 
 
@@ -35,13 +36,10 @@ def authenticate_employee(
     """
     Verify employee credentials.
     """
-    print("Authenticating employee with email:", login_data.email)
     employee = get_employee_by_email(
         db,
         login_data.email
     )
-
-    print("employee data after fetch", employee)
 
     if employee is None:
         return None
@@ -69,7 +67,6 @@ def login_employee(
     Authenticate employee and generate JWT.
     """
 
-    print("Logging in employee with email:", login_data)
     employee = authenticate_employee(
         db,
         login_data
@@ -87,9 +84,16 @@ def login_employee(
         data={
             "sub": str(employee.id),
             "email": employee.email,
-            "role": role_name
+            "role": role_name,
+            "ver": employee.token_version,
         }
     )
+
+    if (
+        Hash.needs_rehash(employee.password_hash)
+        and len(login_data.password.encode("utf-8")) <= 72
+    ):
+        employee.password_hash = Hash.hash_password(login_data.password)
 
     employee.last_login = datetime.now(timezone.utc)
 
@@ -131,8 +135,7 @@ def change_password(
     employee.password_hash = Hash.hash_password(
         password_data.new_password
     )
-
-    employee.password_changed_at = datetime.now(timezone.utc)
+    employee.token_version += 1
 
     db.commit()
 
@@ -141,6 +144,38 @@ def change_password(
     return {
         "message": "Password changed successfully"
     }
+
+
+def revoke_access_token(db: Session, token: str) -> None:
+    payload = JWTHandler.verify_access_token(token)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_id = payload.get("jti")
+    expiration = payload.get("exp")
+    if not isinstance(token_id, str) or not isinstance(expiration, (int, float)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    now = datetime.now(timezone.utc)
+    db.query(RevokedToken).filter(RevokedToken.expires_at <= now).delete(
+        synchronize_session=False
+    )
+    db.add(
+        RevokedToken(
+            jti=token_id,
+            expires_at=datetime.fromtimestamp(expiration, timezone.utc),
+            revoked_at=now,
+        )
+    )
+    db.commit()
 
 
 def update_last_login(

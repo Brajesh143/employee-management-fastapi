@@ -1,17 +1,24 @@
 import hashlib
 import secrets
 
+import bcrypt
+
 
 class Hash:
+    BCRYPT_ROUNDS = 12
 
     @staticmethod
     def hash_password(password: str) -> str:
         """
-        Hash a plain-text password using SHA-256 with a random salt.
+        Hash a password using bcrypt.
         """
-        salt = secrets.token_hex(16)
-        digest = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
-        return f"{salt}${digest}"
+        password_bytes = password.encode("utf-8")
+        if len(password_bytes) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes.")
+        return bcrypt.hashpw(
+            password_bytes,
+            bcrypt.gensalt(rounds=Hash.BCRYPT_ROUNDS),
+        ).decode("ascii")
 
     @staticmethod
     def verify_password(
@@ -19,12 +26,25 @@ class Hash:
         hashed_password: str
     ) -> bool:
         """
-        Verify a plain-text password against a stored hash.
+        Verify bcrypt hashes and transparently support the previous salted SHA-256 format.
         """
-        if not hashed_password or "$" not in hashed_password:
+        if not hashed_password:
+            return False
+
+        password_bytes = plain_password.encode("utf-8")
+        if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+            try:
+                return bcrypt.checkpw(password_bytes, hashed_password.encode("ascii"))
+            except (ValueError, UnicodeEncodeError):
+                return False
+
+        if "$" not in hashed_password:
             return False
 
         salt, digest = hashed_password.split("$", 1)
-        salt = salt[:-1] if salt.endswith(":") else salt
         expected = hashlib.sha256(f"{salt}:{plain_password}".encode("utf-8")).hexdigest()
         return secrets.compare_digest(expected, digest)
+
+    @staticmethod
+    def needs_rehash(hashed_password: str) -> bool:
+        return not hashed_password.startswith(("$2a$", "$2b$", "$2y$"))

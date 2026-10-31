@@ -1,4 +1,9 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
+from auth.jwt import JWTHandler
 
 # Import models explicitly so SQLAlchemy can resolve relationships
 from models.department import Department  # noqa: F401
@@ -28,9 +33,16 @@ from models.audit_log import AuditLog  # noqa: F401
 from models.notification import Notification  # noqa: F401
 from core.logging_config import setup_logging
 
+load_dotenv()
 setup_logging()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    JWTHandler.validate_configuration()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def read_root():

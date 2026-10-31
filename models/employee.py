@@ -42,6 +42,11 @@ class Employee(Base):
     exit_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    token_version: Mapped[int] = mapped_column(
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

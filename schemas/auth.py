@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 
@@ -59,8 +59,16 @@ class ChangePassword(BaseModel):
 
     confirm_password: str = Field(
         ...,
-        min_length=6
+        min_length=6,
+        max_length=72,
     )
+
+    @field_validator("new_password", "confirm_password")
+    @classmethod
+    def validate_password_byte_length(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes.")
+        return password
 
 
 class ForgotPassword(BaseModel):
@@ -80,12 +88,14 @@ class ResetPassword(BaseModel):
 
     new_password: str = Field(
         ...,
-        min_length=6
+        min_length=8,
+        max_length=72,
     )
 
     confirm_password: str = Field(
         ...,
-        min_length=6
+        min_length=8,
+        max_length=72,
     )
 
 

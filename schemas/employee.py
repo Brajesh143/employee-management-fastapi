@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Annotated
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class EmployeeBase(BaseModel):
     employee_code: Annotated[
@@ -158,10 +158,17 @@ class EmployeeCreate(EmployeeBase):
         str,
         Field(
             min_length=8,
-            max_length=100,
+            max_length=72,
             description="Employee password"
         )
     ]
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_byte_length(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes.")
+        return password
 
 class EmployeeUpdate(BaseModel):
     employee_code: Annotated[

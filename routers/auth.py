@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from crud.auth import login_employee, change_password
-from auth.dependencies import get_current_active_user
+from crud.auth import login_employee, change_password, revoke_access_token
+from auth.dependencies import get_current_active_user, oauth2_scheme
 from models.employee import Employee
 from schemas.auth import (
     LoginRequest,
@@ -35,6 +35,20 @@ def login(
         db=db,
         login_data=login_data
     )
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Logout and revoke the current access token",
+)
+def logout(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+) -> Response:
+    revoke_access_token(db, token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ==============================
