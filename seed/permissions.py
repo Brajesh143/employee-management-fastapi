@@ -1,11 +1,14 @@
 from sqlalchemy.orm import Session
 
 from models.department import Department  # noqa: F401
+from models.designation import Designation  # noqa: F401
 from models.employee import Employee  # noqa: F401
+from models.employee_document import EmployeeDocument  # noqa: F401
 from models.leave import Leave  # noqa: F401
 from models.permission import Permission
 from models.role import Role  # noqa: F401
 from models.role_permission import RolePermission  # noqa: F401
+from models.shift import Shift  # noqa: F401
 
 
 DEFAULT_PERMISSIONS = [
@@ -25,6 +28,20 @@ DEFAULT_PERMISSIONS = [
     {
         "name": "employee:delete",
         "description": "Delete employee"
+    },
+    {
+        "name": "employee:import",
+        "description": "Import employees"
+    },
+    {
+        "name": "employee:export",
+        "description": "Export employees"
+    },
+
+    # Documents
+    {
+        "name": "document:manage",
+        "description": "Manage employee documents"
     },
 
     # Department
@@ -110,6 +127,14 @@ DEFAULT_PERMISSIONS = [
         "name": "leave:approve",
         "description": "Approve leave"
     },
+    {
+        "name": "leave:cancel",
+        "description": "Cancel leave requests"
+    },
+    {
+        "name": "leave:balance:manage",
+        "description": "Manage employee leave balances"
+    },
 
     # Salary
     {
@@ -128,12 +153,94 @@ DEFAULT_PERMISSIONS = [
         "name": "salary:delete",
         "description": "Delete salary"
     },
+    {
+        "name": "payroll:generate",
+        "description": "Generate payroll"
+    },
+    {
+        "name": "payslip:read",
+        "description": "View payslips"
+    },
+
+    # Expenses and reimbursements
+    {
+        "name": "expense:create",
+        "description": "Create expense claims"
+    },
+    {
+        "name": "expense:read",
+        "description": "View expense claims"
+    },
+    {
+        "name": "expense:update",
+        "description": "Update expense claims"
+    },
+    {
+        "name": "expense:delete",
+        "description": "Delete expense claims"
+    },
+    {
+        "name": "expense:approve",
+        "description": "Approve expense claims"
+    },
+    {
+        "name": "reimbursement:create",
+        "description": "Create reimbursement requests"
+    },
+    {
+        "name": "reimbursement:read",
+        "description": "View reimbursement requests"
+    },
+    {
+        "name": "reimbursement:approve",
+        "description": "Approve reimbursement requests"
+    },
+
+    # Performance and recruitment
+    {
+        "name": "performance:review",
+        "description": "Create and manage performance reviews"
+    },
+    {
+        "name": "recruitment:manage",
+        "description": "Manage job openings, candidates, and interviews"
+    },
 
     # Reports
     {
         "name": "report:read",
         "description": "View attendance and HR reports"
-    }
+    },
+    {
+        "name": "report:team:read",
+        "description": "View team reports"
+    },
+
+    # AI, audit, notifications, and system administration
+    {
+        "name": "ai:chat",
+        "description": "Use self-service AI chat"
+    },
+    {
+        "name": "ai:admin",
+        "description": "Administer AI features and configuration"
+    },
+    {
+        "name": "audit:read",
+        "description": "View audit logs"
+    },
+    {
+        "name": "notification:manage",
+        "description": "Manage application notifications"
+    },
+    {
+        "name": "system:config",
+        "description": "Manage system configuration"
+    },
+    {
+        "name": "secrets:manage",
+        "description": "Manage application secrets"
+    },
 ]
 
 

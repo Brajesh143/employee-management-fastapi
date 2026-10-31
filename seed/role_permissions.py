@@ -15,6 +15,9 @@ ROLE_PERMISSIONS = {
         "employee:read",
         "employee:update",
         "employee:delete",
+        "employee:import",
+        "employee:export",
+        "document:manage",
 
         "department:create",
         "department:read",
@@ -38,19 +41,37 @@ ROLE_PERMISSIONS = {
         "leave:update",
         "leave:delete",
         "leave:approve",
+        "leave:cancel",
+        "leave:balance:manage",
 
         "salary:create",
         "salary:read",
         "salary:update",
         "salary:delete",
+        "payroll:generate",
+        "payslip:read",
+
+        "expense:create",
+        "expense:read",
+        "expense:update",
+        "expense:delete",
+        "expense:approve",
+        "reimbursement:create",
+        "reimbursement:read",
+        "reimbursement:approve",
 
         "report:read",
+        "audit:read",
+        "notification:manage",
     ],
 
-    "Human Resource": [
+    "HR": [
         "employee:create",
         "employee:read",
         "employee:update",
+        "employee:import",
+        "employee:export",
+        "document:manage",
 
         "department:read",
 
@@ -62,10 +83,46 @@ ROLE_PERMISSIONS = {
 
         "leave:read",
         "leave:approve",
+        "leave:cancel",
+        "leave:balance:manage",
 
-        "salary:read",
+        "expense:create",
+        "expense:read",
+        "expense:update",
+        "expense:approve",
+        "reimbursement:read",
+        "recruitment:manage",
 
         "report:read",
+        "notification:manage",
+    ],
+
+    # Retain permissions for installations that already have the former role name.
+    "Human Resource": [
+        "employee:create",
+        "employee:read",
+        "employee:update",
+        "employee:import",
+        "employee:export",
+        "document:manage",
+        "department:read",
+        "attendance:create",
+        "attendance:read",
+        "attendance:update",
+        "attendance:correct",
+        "attendance:wfh",
+        "leave:read",
+        "leave:approve",
+        "leave:cancel",
+        "leave:balance:manage",
+        "expense:create",
+        "expense:read",
+        "expense:update",
+        "expense:approve",
+        "reimbursement:read",
+        "recruitment:manage",
+        "report:read",
+        "notification:manage",
     ],
 
     "Manager": [
@@ -79,8 +136,26 @@ ROLE_PERMISSIONS = {
         "leave:read",
         "leave:approve",
 
-        "salary:read",
+        "report:read",
+        "report:team:read",
+        "performance:review",
+    ],
 
+    "Finance": [
+        "salary:create",
+        "salary:read",
+        "salary:update",
+        "salary:delete",
+        "payroll:generate",
+        "payslip:read",
+        "expense:create",
+        "expense:read",
+        "expense:update",
+        "expense:delete",
+        "expense:approve",
+        "reimbursement:create",
+        "reimbursement:read",
+        "reimbursement:approve",
         "report:read",
     ],
 
@@ -90,42 +165,61 @@ ROLE_PERMISSIONS = {
 
         "leave:create",
         "leave:read",
+        "leave:cancel",
+        "payslip:read",
+        "ai:chat",
+    ],
 
-        "salary:read",
+    "Recruiter": [
+        "recruitment:manage",
     ],
 }
 
-def seed_role_permissions(db: Session):
+
+def seed_role_permissions(db: Session) -> None:
 
     try:
-        db.query(RolePermission).delete(
-            synchronize_session=False
-        )
-
         all_permissions = {
             permission.name: permission
             for permission in db.query(Permission).all()
         }
-
-        for role_name, permission_names in ROLE_PERMISSIONS.items():
-
-            role = (
-                db.query(Role)
-                .filter(Role.name == role_name)
-                .first()
+        missing_permissions = sorted(
+            {
+                permission_name
+                for permission_names in ROLE_PERMISSIONS.values()
+                for permission_name in permission_names
+                if permission_name != "*" and permission_name not in all_permissions
+            }
+        )
+        if missing_permissions:
+            raise ValueError(
+                "Role permission seed references undefined permissions: "
+                + ", ".join(missing_permissions)
             )
 
+        roles = {
+            role.name: role
+            for role in db.query(Role)
+            .filter(Role.name.in_(ROLE_PERMISSIONS))
+            .all()
+        }
+
+        if roles:
+            role_ids = [role.id for role in roles.values()]
+            db.query(RolePermission).filter(
+                RolePermission.role_id.in_(role_ids)
+            ).delete(synchronize_session=False)
+
+        for role_name, permission_names in ROLE_PERMISSIONS.items():
+            role = roles.get(role_name)
             if role is None:
-                print(f"Role '{role_name}' not found.")
                 continue
 
             if "*" in permission_names:
                 permissions = all_permissions.values()
             else:
                 permissions = [
-                    all_permissions[name]
-                    for name in permission_names
-                    if name in all_permissions
+                    all_permissions[name] for name in permission_names
                 ]
 
             for permission in permissions:

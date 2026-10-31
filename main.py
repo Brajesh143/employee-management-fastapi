@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 
-from database import Base, engine
-
 # Import models explicitly so SQLAlchemy can resolve relationships
 from models.department import Department  # noqa: F401
+from models.designation import Designation  # noqa: F401
+from models.employee_document import EmployeeDocument  # noqa: F401
 from models.role import Role  # noqa: F401
 from models.employee import Employee  # noqa: F401
 from routers import (
     department,
+    designation,
     role,
     employee,
     attendence,
@@ -27,8 +28,6 @@ from models.audit_log import AuditLog  # noqa: F401
 from models.notification import Notification  # noqa: F401
 from core.logging_config import setup_logging
 
-Base.metadata.create_all(bind=engine)
-
 setup_logging()
 
 app = FastAPI()
@@ -41,6 +40,12 @@ app.include_router(
     department.router,
     prefix="/departments",
     tags=["Department"]
+)
+
+app.include_router(
+    designation.router,
+    prefix="/designations",
+    tags=["Designation"]
 )
 
 app.include_router(

@@ -7,6 +7,8 @@ from alembic import context
 from database import Base
 
 from models.department import Department
+from models.designation import Designation
+from models.employee_document import EmployeeDocument
 from models.role import Role
 from models.employee import Employee
 from models.attendence import Attendance

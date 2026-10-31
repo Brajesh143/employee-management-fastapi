@@ -84,6 +84,30 @@ HR:
     Permission and action:
     Able to see leaves, approve leaves, leave request
 
+## Streamlit employee management
+
+Start the FastAPI backend, apply the database migrations, and seed roles and
+permissions before launching the Streamlit frontend:
+
+```bash
+./myenv/bin/alembic upgrade head
+./myenv/bin/python seed/run_seed.py
+./myenv/bin/uvicorn main:app --reload
+```
+
+In another terminal:
+
+```bash
+./myenv/bin/streamlit run frontend/app.py
+```
+
+Set `API_BASE_URL` in the frontend environment when FastAPI is not running at
+`http://127.0.0.1:8000`. The Employee Management workspace provides a filtered
+employee directory and CSV export, employee hire/manager/designation assignment,
+document upload and download, CSV import dry-run preview, designation
+management, and soft-exit recording. Access to each action is enforced by the
+backend role permissions.
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

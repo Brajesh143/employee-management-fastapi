@@ -82,6 +82,11 @@ class EmployeeBase(BaseModel):
         )
     ]
 
+    designation_id: Annotated[
+        int | None,
+        Field(default=None, description="ID of the employee's designation")
+    ]
+
     role_id: Annotated[
         int | None,
         Field(
@@ -204,6 +209,11 @@ class EmployeeUpdate(BaseModel):
         Field(default=None)
     ]
 
+    designation_id: Annotated[
+        int | None,
+        Field(default=None)
+    ]
+
     role_id: Annotated[
         int | None,
         Field(default=None)
@@ -242,6 +252,8 @@ class EmployeeUpdate(BaseModel):
 class EmployeeResponse(EmployeeBase):
     id: int
     is_active: bool
+    exit_date: date | None
+    exit_reason: str | None
     last_login: datetime | None
     leave_balance: float
     created_at: datetime

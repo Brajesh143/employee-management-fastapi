@@ -109,6 +109,7 @@ uploads/
 media/
 static/uploads/
 profile_images/
+local_storage/employee_documents/
 
 # ==========================================
 # Temporary Files

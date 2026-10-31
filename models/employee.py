@@ -22,6 +22,9 @@ class Employee(Base):
     department_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.id"), nullable=True, index=True
     )
+    designation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("designations.id"), nullable=True, index=True
+    )
     role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id"), nullable=True, index=True)
     reporting_manager_id: Mapped[int | None] = mapped_column(
         ForeignKey("employees.id"), nullable=True, index=True
@@ -35,6 +38,8 @@ class Employee(Base):
     profile_image: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    exit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    exit_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -51,6 +56,7 @@ class Employee(Base):
     leave_balance = mapped_column(Float, default=20, nullable=False)
 
     department = relationship("Department", back_populates="employees")
+    designation = relationship("Designation", back_populates="employees")
     role = relationship("Role", back_populates="employees")
     shift = relationship("Shift", back_populates="employees")
     reporting_manager = relationship(
@@ -62,6 +68,11 @@ class Employee(Base):
         "Leave",
         back_populates="employee",
         foreign_keys="Leave.employee_id"
+    )
+    documents = relationship(
+        "EmployeeDocument",
+        back_populates="employee",
+        cascade="all, delete-orphan",
     )
 
     @validates("email")

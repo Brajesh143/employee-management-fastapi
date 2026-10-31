@@ -14,7 +14,7 @@ from models.wfh_request import WfhRequest
 from services.audit import write_audit_log
 from services.notifications import notify
 
-ORG_ROLES = {"Super Admin", "Admin", "Human Resource"}
+ORG_ROLES = {"Super Admin", "Admin", "HR", "Human Resource"}
 WORK_MODES = {"office", "wfh"}
 
 

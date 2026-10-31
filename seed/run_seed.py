@@ -8,12 +8,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from database import SessionLocal
 from seed.permissions import seed_permissions
 from seed.role_permissions import seed_role_permissions
+from seed.roles import seed_roles
 
 
 def run():
     db = SessionLocal()
 
     try:
+        seed_roles(db)
         seed_permissions(db)
         seed_role_permissions(db)
 

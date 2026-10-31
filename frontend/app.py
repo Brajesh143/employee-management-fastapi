@@ -5,6 +5,8 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+from frontend.employee_management import render_employee_management
+
 load_dotenv()
 
 API_BASE_URL = os.getenv(
@@ -34,6 +36,7 @@ def api_request(method, endpoint, **kwargs):
     """Send authenticated requests to FastAPI."""
 
     headers = kwargs.pop("headers", {})
+    return_response = kwargs.pop("return_response", False)
 
     if st.session_state.token:
         headers["Authorization"] = (
@@ -56,6 +59,9 @@ def api_request(method, endpoint, **kwargs):
             st.rerun()
 
         response.raise_for_status()
+
+        if return_response:
+            return response
 
         if response.status_code == 204:
             return None
@@ -125,9 +131,7 @@ def login_page():
 
             if result and result.get("access_token"):
                 st.session_state.token = result["access_token"]
-
-                # Adapt this to your actual login response.
-                st.session_state.user = result.get("user", {})
+                st.session_state.user = api_request("GET", "/auth/me") or {}
 
                 st.rerun()
 
@@ -155,77 +159,7 @@ def dashboard_page():
 # ---------------- EMPLOYEES ----------------
 
 def employees_page():
-    st.title("👥 Employee Management")
-
-    tab1, tab2 = st.tabs(
-        ["Employee List", "Add Employee"]
-    )
-
-    with tab1:
-        if st.button("🔄 Refresh Employees"):
-            st.rerun()
-
-        employees = api_request(
-            "GET",
-            "/employees/",
-        )
-
-        if employees is not None:
-            if isinstance(employees, dict):
-                employees = employees.get(
-                    "data", employees.get("items", [])
-                )
-
-            if employees:
-                st.dataframe(
-                    pd.DataFrame(employees),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            else:
-                st.info("No employees found.")
-
-    with tab2:
-        with st.form("add_employee_form"):
-            first_name = st.text_input("First Name")
-            last_name = st.text_input("Last Name")
-            email = st.text_input("Email")
-            password = st.text_input("Password")
-            employee_code = st.text_input("Employee Code")
-            phone = st.text_input("Phone")
-            department_id = st.number_input(
-                "Department ID", min_value=1, step=1
-            )
-            role_id = st.number_input(
-                "Role ID", min_value=1, step=1
-            )
-
-            submitted = st.form_submit_button(
-                "Create Employee",
-                type="primary",
-            )
-
-        if submitted:
-            payload = {
-                "first_name": first_name,
-                "last_name": last_name,
-                "email": email,
-                "password": password,
-                "employee_code": employee_code,
-                "phone": phone,
-                "department_id": int(department_id),
-                "role_id": int(role_id),
-            }
-
-            result = api_request(
-                "POST",
-                "/employees/",
-                json=payload,
-            )
-
-            if result is not None:
-                st.success("Employee created successfully.")
-                st.rerun()
+    render_employee_management(api_request)
 
 
 # ---------------- ATTENDANCE ----------------

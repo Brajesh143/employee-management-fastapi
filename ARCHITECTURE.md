@@ -133,13 +133,22 @@ employee-management/
 | Manager | Team attendance/leave approval, performance, team reports |
 | Finance | Payroll, expenses, reimbursement, payroll reports |
 | Employee | Self attendance, leave apply, own payslip, self-service AI |
-| Recruiter | Job openings, candidates, interviews (optional split from HR) |
+| Recruiter | Job openings, candidates, and interviews |
 
-### 3.2 Permission naming (extend `seed/permissions.py`)
+These roles and their permission assignments are created by `seed/run_seed.py`.
+The permission catalog is broader than the currently implemented routes; each
+new feature must add route-level checks and enforce employee/team data scope.
+
+### 3.2 Permission naming (`seed/permissions.py`)
 
 Pattern: `resource:action` (already used).
 
-Examples to add: `employee:import`, `employee:export`, `document:manage`, `attendance:correct`, `attendance:wfh`, `leave:cancel`, `leave:balance:manage`, `payroll:generate`, `payslip:read`, `expense:approve`, `performance:review`, `recruitment:manage`, `report:read`, `ai:chat`, `ai:admin`, `audit:read`, `notification:manage`.
+The seeded catalog includes `employee:import`, `employee:export`,
+`document:manage`, `attendance:correct`, `attendance:wfh`, `leave:cancel`,
+`leave:balance:manage`, `payroll:generate`, `payslip:read`, expense and
+reimbursement actions, `performance:review`, `recruitment:manage`,
+`report:team:read`, `ai:chat`, `ai:admin`, `audit:read`,
+`notification:manage`, `system:config`, and `secrets:manage`.
 
 Every new router endpoint must use `require_permission(...)`. Manager-scoped data (team only) is enforced in the service layer using `reporting_manager_id`, not only by role name.
 
@@ -149,25 +158,47 @@ Every new router endpoint must use `require_permission(...)`. Manager-scoped dat
 
 ### 4.1 Core HR (extend existing)
 
-**employees** (existing) — add:
+The employee foundation is implemented with the current employee model:
 
-- `reporting_manager_id` → `employees.id`
+- `reporting_manager_id` → `employees.id` (existing; active-manager and cycle checks on assignment)
 - `designation_id` → `designations.id`
-- `employment_type` (full-time, contractor, intern)
-- `exit_date`, `exit_reason` (attrition)
+- `exit_date`, `exit_reason`, and `is_active` for soft exits
 
-**designations** — id, name, department_id, level, is_active.
+**designations** — id, name, description, is_active.
 
-**employee_documents** — id, employee_id, doc_type, file_key (S3), mime, uploaded_by, uploaded_at, is_sensitive.
+**employee_documents** — employee_id, original filename, storage key, content type,
+file size, and upload time. A storage protocol is implemented with local disk as
+the initial adapter. Set `EMPLOYEE_DOCUMENTS_DIR` to change the storage root;
+uploads accept PDF, PNG, and JPEG files up to 10 MB.
 
-### 4.2 Auth & security
+### 4.2 Employee foundation APIs
+
+- `GET /employees` accepts pagination, search, department, designation, role,
+  manager, active/status, joining-date, and allowlisted sort parameters. It
+  retains the array response and returns `X-Total-Count`, `X-Page`, and
+  `X-Page-Size`.
+- `GET /employees/export` accepts the same filters and produces a formula-safe
+  CSV file.
+- `POST /employees/import/preview` validates a UTF-8 CSV without writing rows.
+- `POST /employees/{id}/documents`, `GET /employees/{id}/documents`, and
+  `GET /employees/documents/{id}/download` are restricted by
+  `document:manage`.
+- `POST /employees/{id}/exit` records exit date/reason and deactivates the
+  employee without deleting the employee record.
+- Designations are listed, created, and updated at `/designations`.
+
+Apply database changes using `./myenv/bin/alembic upgrade head`.
+Alembic owns schema creation and upgrades; starting the API does not create
+tables automatically.
+
+### 4.3 Auth & security
 
 - **refresh_tokens** — jti, employee_id, hashed_token, expires_at, revoked_at, user_agent, ip
 - **password_reset_tokens** — employee_id, hashed_token, expires_at, used_at
 - **audit_logs** — actor_id, action, resource_type, resource_id, ip, user_agent, before/after JSON, created_at
 - **idempotency_keys** — key, employee_id, request_hash, response_code, response_body, created_at
 
-### 4.3 Attendance (extend `attendance`)
+### 4.4 Attendance (extend `attendance`)
 
 Add: `source` (web/mobile/import), `work_mode` (office/wfh), `late_minutes`, `early_leave_minutes`, `shift_id`, `notes`.
 
@@ -179,7 +210,7 @@ New:
 
 Unique constraint: `(employee_id, attendance_date)`.
 
-### 4.4 Leave (extend `leaves`)
+### 4.5 Leave (extend `leaves`)
 
 Add: `policy_id`, `current_approver_id`, `approval_level`, `cancelled_at`, `cancelled_by`.
 
@@ -189,7 +220,7 @@ New:
 - **leave_balances** — employee_id, policy_id, year, entitled, used, pending, remaining
 - **leave_approval_steps** — leave_id, level, approver_id, status, comment, acted_at
 
-### 4.5 Payroll & expenses
+### 4.6 Payroll & expenses
 
 Extend **salary** or split:
 
