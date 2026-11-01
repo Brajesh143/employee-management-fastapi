@@ -283,7 +283,11 @@ def create_attendance(
 ):
     if not has_permission(db, current_user, "employee:read:all"):
         attendance = attendance.model_copy(update={"employee_id": current_user.id})
-    return crud.create_attendance(db, attendance)
+    return crud.create_attendance(
+        db,
+        attendance,
+        actor_id=current_user.id,
+    )
 
 
 @router.get(
@@ -344,7 +348,12 @@ def update_attendance(
     if existing is None:
         raise HTTPException(status_code=404, detail="Attendance record not found")
 
-    updated_attendance = crud.update_attendance(db, attendance_id, attendance)
+    updated_attendance = crud.update_attendance(
+        db,
+        attendance_id,
+        attendance,
+        actor_id=current_user.id,
+    )
     if not updated_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return updated_attendance
@@ -369,7 +378,11 @@ def delete_attendance(
     if existing is None:
         raise HTTPException(status_code=404, detail="Attendance record not found")
 
-    deleted_attendance = crud.delete_attendance(db, attendance_id)
+    deleted_attendance = crud.delete_attendance(
+        db,
+        attendance_id,
+        actor_id=current_user.id,
+    )
     if not deleted_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return deleted_attendance

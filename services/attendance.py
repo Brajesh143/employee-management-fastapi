@@ -165,6 +165,8 @@ def compute_metrics(
         overtime_hours = round(max(working_hours - expected, 0), 2)
 
         shift_end = datetime.combine(check_in.date(), shift.end_time)
+        if shift.end_time <= shift.start_time:
+            shift_end += timedelta(days=1)
         if check_out < shift_end:
             early_leave_minutes = int((shift_end - check_out).total_seconds() // 60)
 
@@ -332,6 +334,12 @@ def create_wfh_request(
     request_date: date,
     reason: str,
 ) -> WfhRequest:
+    if request_date < current_datetime().date():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="WFH requests cannot be submitted for a past date.",
+        )
+
     existing = (
         db.query(WfhRequest)
         .filter(
@@ -715,7 +723,8 @@ def build_attendance_report(
         employees = employees_query.all()
     elif "employee:team:read" in get_permission_names(db, user):
         employees = employees_query.filter(
-            Employee.reporting_manager_id == user.id
+            (Employee.id == user.id)
+            | (Employee.reporting_manager_id == user.id)
         ).all()
     else:
         employees = employees_query.filter(Employee.id == user.id).all()

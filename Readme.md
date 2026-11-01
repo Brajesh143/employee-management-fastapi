@@ -137,6 +137,15 @@ pagination and filtering by actor, action, resource, and date range. Employee,
 role, permission, and attendance changes record before/after snapshots; employee
 snapshots exclude password hashes and other authentication secrets.
 
+Attendance self-service is available from the Streamlit **Attendance** page.
+Employees can check in and out, view their attendance history, request WFH, and
+submit corrections. Managers and authorized HR/Admin users can review requests
+within their reporting scope. The attendance report supports date ranges and
+optional department filtering; report access requires `report:read`.
+Check-in/check-out endpoints are `POST /attendance/check-in` and
+`POST /attendance/check-out`; correction requests use
+`POST /attendance/corrections`.
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

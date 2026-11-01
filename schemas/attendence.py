@@ -1,7 +1,7 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 WorkMode = Literal["office", "wfh"]
 AttendanceStatus = Literal[
@@ -102,6 +102,32 @@ class CorrectionCreate(BaseModel):
     requested_check_out: datetime | None = None
     requested_work_mode: WorkMode | None = None
     reason: str = Field(min_length=3)
+
+    @field_validator("requested_check_in", "requested_check_out")
+    @classmethod
+    def normalize_requested_datetime(
+        cls,
+        value: datetime | None,
+    ) -> datetime | None:
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    @model_validator(mode="after")
+    def require_correction_value(self) -> "CorrectionCreate":
+        if (
+            self.requested_check_in is None
+            and self.requested_check_out is None
+            and self.requested_work_mode is None
+        ):
+            raise ValueError("At least one attendance field must be corrected.")
+        if (
+            self.requested_check_in is not None
+            and self.requested_check_out is not None
+            and self.requested_check_out < self.requested_check_in
+        ):
+            raise ValueError("Check-out must be after check-in.")
+        return self
 
 
 class CorrectionResponse(BaseModel):
