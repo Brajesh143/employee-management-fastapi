@@ -1322,38 +1322,453 @@ def leave_page():
 # -----------------Salary Page -----------------
 
 def salary_page():
-    st.title("$ Salary Management")
-
-    tab1, tab2 = st.tabs(
-        ["Salary List", "Create Salary"]
-    )
-
-    with tab1:
-        employee_id = st.number_input(
-            "Employee ID",
-            min_value=1,
-            step=1,
-            key="salary_employee_id",
+    st.title("💼 Payroll & Expenses")
+    user = st.session_state.user or {}
+    employee_id = user.get("id")
+    permissions = set(st.session_state.permissions or [])
+    has_all_permissions = "*" in permissions
+    can_read_payroll = has_all_permissions or "salary:read" in permissions
+    can_read_payslips = has_all_permissions or "payslip:read" in permissions
+    can_manage_structure = has_all_permissions or "salary:create" in permissions
+    can_generate_payroll = has_all_permissions or "payroll:generate" in permissions
+    can_create_expense = has_all_permissions or "expense:create" in permissions
+    can_read_expenses = has_all_permissions or bool(
+        permissions.intersection(
+            {
+                "expense:read",
+                "expense:approve",
+                "reimbursement:read",
+                "reimbursement:approve",
+            }
         )
+    )
+    can_approve_expenses = has_all_permissions or "expense:approve" in permissions
+    can_reimburse = has_all_permissions or "reimbursement:approve" in permissions
 
-        if st.button("Fetch Salary List"):
-            salaries = api_request(
-                "GET",
-                f"/salaries/employee/{int(employee_id)}",
-            )
+    tab_names = []
+    if can_read_payroll or can_read_payslips:
+        tab_names.append("Payslips")
+    if can_manage_structure:
+        tab_names.append("Salary structures")
+    if can_generate_payroll:
+        tab_names.append("Payroll generation")
+    if can_create_expense or can_read_expenses:
+        tab_names.append("Expenses")
+    if not tab_names:
+        st.info("Your role has no payroll or expense permissions.")
+        return
+    tabs = dict(zip(tab_names, st.tabs(tab_names), strict=True))
 
-            if salaries is not None:
-                if salaries:
+    if "Payslips" in tabs:
+        with tabs["Payslips"]:
+            if can_read_payroll:
+                filter_columns = st.columns(2)
+                payroll_month = filter_columns[0].selectbox(
+                    "Month",
+                    list(range(1, 13)),
+                    index=date.today().month - 1,
+                    format_func=lambda value: date(2000, value, 1).strftime("%B"),
+                    key="salary_list_month",
+                )
+                payroll_year = filter_columns[1].number_input(
+                    "Year",
+                    min_value=2000,
+                    max_value=2200,
+                    value=date.today().year,
+                    step=1,
+                    key="salary_list_year",
+                )
+                salaries = api_request(
+                    "GET",
+                    "/salaries/",
+                    params={"month": payroll_month, "year": int(payroll_year)},
+                )
+            elif isinstance(employee_id, int):
+                salaries = api_request(
+                    "GET",
+                    "/salaries/",
+                    params={
+                        "month": date.today().month,
+                        "year": date.today().year,
+                    },
+                )
+            else:
+                salaries = []
+
+            if salaries:
+                st.dataframe(
+                    pd.DataFrame(salaries),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                if can_read_payslips:
+                    selected_salary_id = st.selectbox(
+                        "Payslip",
+                        [item["id"] for item in salaries],
+                        format_func=lambda value: next(
+                            (
+                                f"{item['year']}-{item['month']:02d} · "
+                                f"{item['payment_status']} · "
+                                f"{item['net_salary']:.2f}"
+                                for item in salaries
+                                if item["id"] == value
+                            ),
+                            str(value),
+                        ),
+                    )
+                    payslip = api_request(
+                        "GET",
+                        f"/salaries/{selected_salary_id}/payslip",
+                    )
+                    if payslip is not None:
+                        st.subheader(
+                            f"Payslip · {payslip['year']}-{payslip['month']:02d}"
+                        )
+                        st.write(
+                            f"{payslip['employee_name']} "
+                            f"({payslip['employee_code']})"
+                        )
+                        st.json(payslip)
+                        download = api_request(
+                            "GET",
+                            f"/salaries/{selected_salary_id}/payslip/download",
+                            return_response=True,
+                        )
+                        if download is not None:
+                            st.download_button(
+                                "Download payslip",
+                                data=download.content,
+                                file_name=(
+                                    f"payslip-{payslip['year']}-"
+                                    f"{payslip['month']:02d}.html"
+                                ),
+                                mime="text/html",
+                            )
+            elif salaries is not None:
+                st.info("No payroll entries found for this period.")
+
+    if "Salary structures" in tabs:
+        with tabs["Salary structures"]:
+            st.subheader("Create salary structure")
+            with st.form("salary_structure_form"):
+                structure_employee_id = st.number_input(
+                    "Employee ID",
+                    min_value=1,
+                    step=1,
+                    key="structure_employee_id",
+                )
+                salary_columns = st.columns(3)
+                basic_salary = salary_columns[0].number_input(
+                    "Basic salary", min_value=0.0, step=100.0
+                )
+                hra = salary_columns[1].number_input(
+                    "HRA", min_value=0.0, step=100.0
+                )
+                allowance = salary_columns[2].number_input(
+                    "Allowance", min_value=0.0, step=100.0
+                )
+                deduction_columns = st.columns(3)
+                recurring_deduction = deduction_columns[0].number_input(
+                    "Recurring deduction", min_value=0.0, step=100.0
+                )
+                tax_rate = deduction_columns[1].number_input(
+                    "Tax rate (%)", min_value=0.0, max_value=100.0, step=0.5
+                )
+                effective_from = deduction_columns[2].date_input(
+                    "Effective from", value=date.today()
+                )
+                structure_submitted = st.form_submit_button(
+                    "Save salary structure",
+                    type="primary",
+                )
+            if structure_submitted:
+                result = api_request(
+                    "POST",
+                    "/salaries/structures",
+                    json={
+                        "employee_id": int(structure_employee_id),
+                        "basic_salary": basic_salary,
+                        "hra": hra,
+                        "allowance": allowance,
+                        "recurring_deduction": recurring_deduction,
+                        "tax_rate": tax_rate,
+                        "effective_from": effective_from.isoformat(),
+                    },
+                )
+                if result is not None:
+                    st.success("Salary structure saved.")
+                    st.rerun()
+
+            if can_read_payroll:
+                structures = api_request("GET", "/salaries/structures")
+                if structures:
+                    st.subheader("Salary structure history")
                     st.dataframe(
-                        pd.DataFrame(salaries),
+                        pd.DataFrame(structures),
                         use_container_width=True,
                         hide_index=True,
                     )
-                else:
-                    st.info("No Salary records found.")
 
-    with tab2:
-        st.info("Salary creation is not available yet.")
+    if "Payroll generation" in tabs:
+        with tabs["Payroll generation"]:
+            st.subheader("Generate monthly payroll")
+            payroll_month_col, payroll_year_col = st.columns(2)
+            run_month = payroll_month_col.selectbox(
+                "Payroll month",
+                list(range(1, 13)),
+                index=date.today().month - 1,
+                format_func=lambda value: date(2000, value, 1).strftime("%B"),
+                key="run_payroll_month",
+            )
+            run_year = payroll_year_col.number_input(
+                "Payroll year",
+                min_value=2000,
+                max_value=2200,
+                value=date.today().year,
+                step=1,
+                key="run_payroll_year",
+            )
+            if st.button("Generate payroll", type="primary"):
+                result = api_request(
+                    "POST",
+                    "/salaries/payroll/generate",
+                    params={"month": run_month, "year": int(run_year)},
+                )
+                if result is not None:
+                    st.success(
+                        f"Generated {result['generated_count']} payroll entry(s); "
+                        f"skipped {result['skipped_count']} employee(s) without "
+                        "a structure or with an existing payroll entry."
+                    )
+                    st.metric("Total net payroll", result["total_net_pay"])
+                    if result["salaries"]:
+                        st.dataframe(
+                            pd.DataFrame(result["salaries"]),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+            if can_read_payroll:
+                pending = api_request(
+                    "GET",
+                    "/salaries/",
+                    params={"month": run_month, "year": int(run_year)},
+                )
+                pending = [
+                    item
+                    for item in (pending or [])
+                    if item["payment_status"] == "Pending"
+                ]
+                if pending:
+                    st.subheader("Record payroll payment")
+                    with st.form("mark_payroll_paid_form"):
+                        salary_id = st.selectbox(
+                            "Payroll entry",
+                            [item["id"] for item in pending],
+                            format_func=lambda value: next(
+                                (
+                                    f"Employee #{item['employee_id']} · "
+                                    f"{item['net_salary']:.2f}"
+                                    for item in pending
+                                    if item["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        payment_date = st.date_input(
+                            "Payment date",
+                            value=date.today(),
+                        )
+                        paid_submitted = st.form_submit_button("Mark as paid")
+                    if paid_submitted:
+                        result = api_request(
+                            "PATCH",
+                            f"/salaries/{salary_id}",
+                            json={
+                                "payment_status": "Paid",
+                                "payment_date": payment_date.isoformat(),
+                            },
+                        )
+                        if result is not None:
+                            st.success("Payroll entry marked as paid.")
+                            st.rerun()
+
+    if "Expenses" in tabs:
+        with tabs["Expenses"]:
+            if can_create_expense:
+                st.subheader("Submit expense claim")
+                with st.form("expense_claim_form"):
+                    expense_date = st.date_input(
+                        "Expense date", value=date.today()
+                    )
+                    category = st.selectbox(
+                        "Category",
+                        [
+                            "Travel",
+                            "Meals",
+                            "Accommodation",
+                            "Supplies",
+                            "Training",
+                            "Other",
+                        ],
+                    )
+                    amount = st.number_input(
+                        "Amount", min_value=0.01, step=10.0, format="%.2f"
+                    )
+                    description = st.text_area("Description")
+                    receipt = st.file_uploader(
+                        "Receipt (PDF, PNG, or JPEG)",
+                        type=["pdf", "png", "jpg", "jpeg"],
+                    )
+                    claim_submitted = st.form_submit_button(
+                        "Submit expense claim",
+                        type="primary",
+                    )
+                if claim_submitted:
+                    if len(description.strip()) < 3:
+                        st.error("Please provide a description of at least 3 characters.")
+                    else:
+                        claim = api_request(
+                            "POST",
+                            "/expenses/",
+                            json={
+                                "expense_date": expense_date.isoformat(),
+                                "category": category,
+                                "amount": amount,
+                                "description": description.strip(),
+                            },
+                        )
+                        if claim is not None and receipt is not None:
+                            saved_claim = api_request(
+                                "POST",
+                                f"/expenses/{claim['id']}/receipt",
+                                files={
+                                    "file": (
+                                        receipt.name,
+                                        receipt.getvalue(),
+                                        receipt.type,
+                                    )
+                                },
+                            )
+                            if saved_claim is None:
+                                st.warning(
+                                    "Claim was created, but the receipt upload failed. "
+                                    "Upload a receipt before requesting approval."
+                                )
+                        if claim is not None:
+                            st.success(f"Expense claim #{claim['id']} submitted.")
+                            st.rerun()
+
+            if can_read_expenses:
+                claims = api_request("GET", "/expenses/")
+                if claims is not None:
+                    st.subheader("Expense claims")
+                    if claims:
+                        st.dataframe(
+                            pd.DataFrame(claims),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                        for claim in claims:
+                            if claim.get("receipt_name"):
+                                receipt_response = api_request(
+                                    "GET",
+                                    f"/expenses/{claim['id']}/receipt",
+                                    return_response=True,
+                                )
+                                if receipt_response is not None:
+                                    st.download_button(
+                                        f"Download receipt for claim #{claim['id']}",
+                                        data=receipt_response.content,
+                                        file_name=claim["receipt_name"],
+                                        mime=claim.get("receipt_content_type")
+                                        or "application/octet-stream",
+                                        key=f"receipt_download_{claim['id']}",
+                                    )
+                    else:
+                        st.info("No expense claims found.")
+
+                    pending_claims = [
+                        claim for claim in claims if claim["status"] == "Pending"
+                    ]
+                    if can_approve_expenses and pending_claims:
+                        st.subheader("Review expense claims")
+                        with st.form("expense_review_form"):
+                            selected_claim_id = st.selectbox(
+                                "Claim",
+                                [claim["id"] for claim in pending_claims],
+                                format_func=lambda value: next(
+                                    (
+                                        f"#{claim['id']} · Employee "
+                                        f"#{claim['employee_id']} · "
+                                        f"{claim['amount']:.2f} · "
+                                        f"{claim['category']}"
+                                        for claim in pending_claims
+                                        if claim["id"] == value
+                                    ),
+                                    str(value),
+                                ),
+                            )
+                            review_comment = st.text_input("Review comment")
+                            approve_column, reject_column = st.columns(2)
+                            expense_approved = approve_column.form_submit_button(
+                                "Approve claim", type="primary"
+                            )
+                            expense_rejected = reject_column.form_submit_button(
+                                "Reject claim"
+                            )
+                        decision = (
+                            "approve"
+                            if expense_approved
+                            else "reject"
+                            if expense_rejected
+                            else None
+                        )
+                        if decision:
+                            result = api_request(
+                                "POST",
+                                f"/expenses/{selected_claim_id}/{decision}",
+                                json={"comment": review_comment.strip() or None},
+                            )
+                            if result is not None:
+                                st.success(f"Expense claim {result['status'].lower()}.")
+                                st.rerun()
+
+                    unpaid_claims = [
+                        claim
+                        for claim in claims
+                        if claim["status"] == "Approved"
+                        and claim["reimbursement_status"] == "Pending"
+                    ]
+                    if can_reimburse and unpaid_claims:
+                        st.subheader("Reimbursement tracking")
+                        with st.form("reimburse_expense_form"):
+                            reimburse_claim_id = st.selectbox(
+                                "Approved claim",
+                                [claim["id"] for claim in unpaid_claims],
+                                format_func=lambda value: next(
+                                    (
+                                        f"#{claim['id']} · "
+                                        f"{claim['amount']:.2f} · "
+                                        f"Employee #{claim['employee_id']}"
+                                        for claim in unpaid_claims
+                                        if claim["id"] == value
+                                    ),
+                                    str(value),
+                                ),
+                            )
+                            reimburse_submitted = st.form_submit_button(
+                                "Mark reimbursement as paid",
+                                type="primary",
+                            )
+                        if reimburse_submitted:
+                            result = api_request(
+                                "POST",
+                                f"/expenses/{reimburse_claim_id}/reimburse",
+                            )
+                            if result is not None:
+                                st.success("Reimbursement marked as paid.")
+                                st.rerun()
 
 # ---------------- AI ASSISTANT ----------------
 

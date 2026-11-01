@@ -25,6 +25,7 @@ from routers import (
     ai_chat,
     reports,
     notifications,
+    expense,
 )
 from models.shift import Shift  # noqa: F401
 from models.holiday import Holiday  # noqa: F401
@@ -101,7 +102,13 @@ app.include_router(
 app.include_router(
     salary.router,
     prefix="/salaries",
-    tags=["Salary"]
+    tags=["Payroll and Salaries"]
+)
+
+app.include_router(
+    expense.router,
+    prefix="/expenses",
+    tags=["Expenses and Reimbursements"],
 )
 
 app.include_router(

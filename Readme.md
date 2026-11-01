@@ -169,6 +169,21 @@ workflow:
 ./myenv/bin/python seed/run_seed.py
 ```
 
+Payroll and expense workflows are available from the Streamlit **Payroll &
+Expenses** page and the `/salaries` and `/expenses` APIs. Users with
+`salary:create` can configure an employee's salary structure with an effective
+date. Users with `payroll:generate` can generate monthly payroll; existing
+entries and employees without an effective salary structure are skipped.
+Employees with `payslip:read` can view and download their own payslips, while
+`salary:read` grants broader payroll access.
+
+Employees submit claims through `POST /expenses/` and attach PDF, PNG, or JPEG
+receipts through `POST /expenses/{claim_id}/receipt` (maximum 10 MB).
+`expense:approve` reviewers approve or reject claims; approved claims become
+eligible for payment. Users with `reimbursement:approve` mark approved claims
+as reimbursed. Expense visibility follows employee/manager scope unless the
+user has organization-wide access. These changes are recorded in the audit log.
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

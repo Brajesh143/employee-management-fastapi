@@ -1,163 +1,99 @@
-from datetime import datetime
-from pydantic import BaseModel, Field
-from typing import Annotated, Literal
+from datetime import date, datetime
 
-class SalaryBase(BaseModel):
-    employee_id: Annotated[
-        int,
-        Field(
-            description="ID of the employee"
-        )
-    ]
-    month: Annotated[
-        int,
-        Field(
-            description="Month of the salary"
-        )
-    ]
-    year: Annotated[
-        int,
-        Field(
-            description="Year of the salary"
-        )
-    ]
-    basic_salary: Annotated[
-        float,
-        Field(
-            description="Basic salary amount"
-        )
-    ]
-    hra: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="House Rent Allowance amount"
-        )
-    ]
-    allowance: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Allowance amount"
-        )
-    ]
-    bonus: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Bonus amount"
-        )
-    ]
-    deduction: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Deduction amount"
-        )
-    ]
-    tax: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Tax amount"
-        )
-    ]
-    net_salary: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Net salary amount"
-        )
-    ]
-    payment_status: Annotated[
-        Literal["Pending", "Paid"],
-        Field(
-            default="Pending",
-            description="Payment status"
-        )
-    ]
-    payment_date: Annotated[
-        datetime | None,
-        Field(
-            default=None,
-            description="Payment date"
-        )
-    ]
+from pydantic import BaseModel, Field, model_validator
 
-class SalaryCreate(SalaryBase):
-    pass
+
+class SalaryStructureCreate(BaseModel):
+    employee_id: int = Field(gt=0)
+    basic_salary: float = Field(ge=0, le=100_000_000)
+    hra: float = Field(default=0, ge=0, le=100_000_000)
+    allowance: float = Field(default=0, ge=0, le=100_000_000)
+    recurring_deduction: float = Field(default=0, ge=0, le=100_000_000)
+    tax_rate: float = Field(default=0, ge=0, le=100)
+    effective_from: date
+
+    model_config = {"extra": "forbid"}
+
+
+class SalaryStructureResponse(BaseModel):
+    id: int
+    employee_id: int
+    basic_salary: float
+    hra: float
+    allowance: float
+    recurring_deduction: float
+    tax_rate: float
+    effective_from: date
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SalaryCreate(BaseModel):
+    employee_id: int = Field(gt=0)
+    month: int = Field(ge=1, le=12)
+    year: int = Field(ge=2000, le=2200)
+    basic_salary: float = Field(ge=0)
+    hra: float = Field(default=0, ge=0)
+    allowance: float = Field(default=0, ge=0)
+    bonus: float = Field(default=0, ge=0)
+    deduction: float = Field(default=0, ge=0)
+    tax: float = Field(default=0, ge=0)
+    payment_status: str = "Pending"
+    payment_date: date | None = None
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def validate_paid_date(self) -> "SalaryCreate":
+        if self.payment_status not in {"Pending", "Paid"}:
+            raise ValueError("Payment status must be Pending or Paid.")
+        if self.payment_status == "Paid" and self.payment_date is None:
+            raise ValueError("Payment date is required for a paid salary.")
+        return self
+
 
 class SalaryUpdate(BaseModel):
-    basic_salary: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated basic salary amount"
-        )
-    ]
-    hra: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated House Rent Allowance amount"
-        )
-    ]
-    allowances: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated Allowances amount"
-        )
-    ]
-    bonus: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated Bonus amount"
-        )
-    ]
-    deductions: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated Deductions amount"
-        )
-    ]
-    tax: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated Tax amount"
-        )
-    ]
-    net_salary: Annotated[
-        float | None,
-        Field(
-            default=None,
-            description="Updated Net salary amount"
-        )
-    ]
-    payment_status: Annotated[
-        Literal["Pending", "Paid"] | None,
-        Field(
-            default=None,
-            description="Updated Payment status"
-        )
-    ]
-    payment_date: Annotated[
-        datetime | None,
-        Field(
-            default=None,
-            description="Updated Payment date"
-        )
-    ]
+    payment_status: str
+    payment_date: date
 
-class SalaryResponse(SalaryBase):
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def validate_payment(self) -> "SalaryUpdate":
+        if self.payment_status != "Paid":
+            raise ValueError("Salary payment can only be marked as Paid.")
+        return self
+
+
+class SalaryResponse(BaseModel):
     id: int
+    employee_id: int
+    month: int
+    year: int
+    basic_salary: float
+    hra: float
+    allowance: float
+    bonus: float
+    deduction: float
+    tax: float
+    net_salary: float
+    payment_status: str
+    payment_date: date | None
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
 
 
-    
+class PayslipResponse(SalaryResponse):
+    employee_name: str
+    employee_code: str
+    email: str
+
+
+class PayrollRunResponse(BaseModel):
+    month: int
+    year: int
+    generated_count: int
+    skipped_count: int
+    total_net_pay: float
+    salaries: list[SalaryResponse]
