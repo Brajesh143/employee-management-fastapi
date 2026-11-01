@@ -131,6 +131,12 @@ requires `permission:manage`. Role permission assignments can be inspected with
 Super Admin always retains every permission; newly created permission
 definitions are automatically assigned to Super Admin roles.
 
+Audit history is available in the Streamlit **Audit logs** page and through
+`GET /audit-logs/`. Access requires `audit:read`. The endpoint supports
+pagination and filtering by actor, action, resource, and date range. Employee,
+role, permission, and attendance changes record before/after snapshots; employee
+snapshots exclude password hashes and other authentication secrets.
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

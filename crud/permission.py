@@ -12,6 +12,7 @@ from models.permission import Permission
 from models.role import Role
 from models.role_permission import RolePermission
 from schemas.permission import PermissionCreate, PermissionUpdate
+from services.audit import write_audit_log
 
 
 def list_permissions(db: Session) -> list[Permission]:
@@ -22,7 +23,12 @@ def get_permission(db: Session, permission_id: int) -> Permission | None:
     return db.query(Permission).filter(Permission.id == permission_id).first()
 
 
-def create_permission(db: Session, payload: PermissionCreate) -> Permission:
+def create_permission(
+    db: Session,
+    payload: PermissionCreate,
+    *,
+    actor_id: int | None = None,
+) -> Permission:
     permission = Permission(
         name=payload.name,
         description=payload.description,
@@ -41,6 +47,14 @@ def create_permission(db: Session, payload: PermissionCreate) -> Permission:
                 for role in super_admin_roles
             ]
         )
+        write_audit_log(
+            db,
+            actor_id=actor_id,
+            action="permission.create",
+            resource_type="permission",
+            resource_id=permission.id,
+            after={"name": permission.name, "description": permission.description},
+        )
         db.commit()
     except IntegrityError as error:
         db.rollback()
@@ -56,14 +70,26 @@ def update_permission(
     db: Session,
     permission_id: int,
     payload: PermissionUpdate,
+    *,
+    actor_id: int | None = None,
 ) -> Permission | None:
     permission = get_permission(db, permission_id)
     if permission is None:
         return None
 
+    before = {"name": permission.name, "description": permission.description}
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(permission, field, value)
     try:
+        write_audit_log(
+            db,
+            actor_id=actor_id,
+            action="permission.update",
+            resource_type="permission",
+            resource_id=permission.id,
+            before=before,
+            after={"name": permission.name, "description": permission.description},
+        )
         db.commit()
     except IntegrityError as error:
         db.rollback()
@@ -75,7 +101,12 @@ def update_permission(
     return permission
 
 
-def delete_permission(db: Session, permission_id: int) -> Permission | None:
+def delete_permission(
+    db: Session,
+    permission_id: int,
+    *,
+    actor_id: int | None = None,
+) -> Permission | None:
     permission = get_permission(db, permission_id)
     if permission is None:
         return None
@@ -97,6 +128,14 @@ def delete_permission(db: Session, permission_id: int) -> Permission | None:
     db.query(RolePermission).filter(
         RolePermission.permission_id == permission_id
     ).delete(synchronize_session=False)
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="permission.delete",
+        resource_type="permission",
+        resource_id=permission.id,
+        before={"name": permission.name, "description": permission.description},
+    )
     db.delete(permission)
     db.commit()
     return permission
@@ -184,6 +223,10 @@ def replace_role_permissions(
         {permission.name for permission in permissions},
     )
 
+    before_permissions = [
+        permission.name
+        for permission in list_role_permissions(db, role_id) or []
+    ]
     db.query(RolePermission).filter(RolePermission.role_id == role_id).delete(
         synchronize_session=False
     )
@@ -192,6 +235,17 @@ def replace_role_permissions(
             RolePermission(role_id=role_id, permission_id=permission.id)
             for permission in permissions
         ]
+    )
+    write_audit_log(
+        db,
+        actor_id=actor.id,
+        action="role.permissions.update",
+        resource_type="role",
+        resource_id=role.id,
+        before={"permissions": before_permissions},
+        after={
+            "permissions": sorted(permission.name for permission in permissions)
+        },
     )
     db.commit()
     return sorted(permissions, key=lambda permission: permission.name)

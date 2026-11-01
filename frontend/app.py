@@ -1,3 +1,4 @@
+import json
 import os
 
 import pandas as pd
@@ -426,6 +427,142 @@ def permission_management_page():
                     st.rerun()
 
 
+# ---------------- AUDIT LOGS ----------------
+
+def audit_logs_page():
+    st.title("Audit logs")
+    st.caption(
+        "Review recorded changes to employee, role, permission, and attendance data."
+    )
+
+    filter_columns = st.columns(4)
+    action_filter = filter_columns[0].text_input(
+        "Action contains",
+        key="audit_action_filter",
+    )
+    resource_filter = filter_columns[1].text_input(
+        "Resource type",
+        key="audit_resource_filter",
+    )
+    actor_filter = filter_columns[2].text_input(
+        "Actor ID",
+        key="audit_actor_filter",
+    )
+    resource_id_filter = filter_columns[3].text_input(
+        "Resource ID",
+        key="audit_resource_id_filter",
+    )
+
+    date_columns = st.columns(2)
+    use_from_date = date_columns[0].checkbox(
+        "Filter from date",
+        key="audit_use_from_date",
+    )
+    use_to_date = date_columns[1].checkbox(
+        "Filter through date",
+        key="audit_use_to_date",
+    )
+    query = {
+        "page": st.session_state.get("audit_page", 1),
+        "page_size": 50,
+    }
+    if action_filter.strip():
+        query["action"] = action_filter.strip()
+    if resource_filter.strip():
+        query["resource_type"] = resource_filter.strip()
+    for field, raw_value in (
+        ("actor_id", actor_filter),
+        ("resource_id", resource_id_filter),
+    ):
+        if raw_value.strip():
+            if not raw_value.strip().isdecimal() or int(raw_value) < 1:
+                st.warning(f"{field.replace('_', ' ').capitalize()} must be a positive integer.")
+                return
+            query[field] = int(raw_value)
+    if use_from_date:
+        query["from"] = date_columns[0].date_input(
+            "From",
+            key="audit_from_date",
+        ).isoformat()
+    if use_to_date:
+        query["to"] = date_columns[1].date_input(
+            "Through",
+            key="audit_to_date",
+        ).isoformat()
+    filter_signature = tuple(
+        sorted(
+            (key, str(value))
+            for key, value in query.items()
+            if key not in {"page", "page_size"}
+        )
+    )
+    if st.session_state.get("audit_filter_signature") != filter_signature:
+        st.session_state.audit_filter_signature = filter_signature
+        st.session_state.audit_page = 1
+        query["page"] = 1
+
+    response = api_request(
+        "GET",
+        "/audit-logs/",
+        params=query,
+        return_response=True,
+    )
+    if response is None:
+        return
+
+    logs = response.json()
+    total = int(response.headers.get("X-Total-Count", len(logs)))
+    st.caption(f"{total} matching audit event(s)")
+    if not logs:
+        st.info("No audit events match these filters.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "ID": item["id"],
+                "Created at": item["created_at"],
+                "Actor ID": item["actor_id"],
+                "Action": item["action"],
+                "Resource": item["resource_type"],
+                "Resource ID": item["resource_id"],
+            }
+            for item in logs
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+    selected_log_id = st.selectbox(
+        "Event details",
+        options=[item["id"] for item in logs],
+        format_func=lambda log_id: (
+            f"#{log_id} "
+            f"{next(item['action'] for item in logs if item['id'] == log_id)}"
+        ),
+    )
+    selected_log = next(
+        item for item in logs if item["id"] == selected_log_id
+    )
+    detail_columns = st.columns(2)
+    with detail_columns[0]:
+        st.subheader("Before")
+        st.json(json.loads(selected_log["before_json"]) if selected_log["before_json"] else {})
+    with detail_columns[1]:
+        st.subheader("After")
+        st.json(json.loads(selected_log["after_json"]) if selected_log["after_json"] else {})
+
+    page = query["page"]
+    page_count = max((total + query["page_size"] - 1) // query["page_size"], 1)
+    previous_column, page_column, next_column = st.columns([1, 2, 1])
+    if previous_column.button("Previous", disabled=page <= 1):
+        st.session_state.audit_page = page - 1
+        st.rerun()
+    page_column.caption(f"Page {page} of {page_count}")
+    if next_column.button("Next", disabled=page >= page_count):
+        st.session_state.audit_page = page + 1
+        st.rerun()
+
+
 # ---------------- ATTENDANCE ----------------
 
 def attendance_page():
@@ -716,6 +853,8 @@ def main():
             or "role:assign" in current_permissions
         ):
             page_options.insert(2, "Permission management")
+        if "*" in current_permissions or "audit:read" in current_permissions:
+            page_options.insert(3, "Audit logs")
 
         page = st.radio("Navigation", page_options)
 
@@ -739,6 +878,8 @@ def main():
         employees_page()
     elif page == "Permission management":
         permission_management_page()
+    elif page == "Audit logs":
+        audit_logs_page()
     elif page == "Attendance":
         attendance_page()
     elif page == "Leave Management":

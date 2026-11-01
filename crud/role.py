@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 from models.employee import Employee
 from models.role import Role
 from schemas.role import RoleCreate, RoleUpdate
+from services.audit import write_audit_log
 
 SYSTEM_ROLE_NAMES = {
     "Super Admin",
@@ -16,7 +17,12 @@ SYSTEM_ROLE_NAMES = {
 }
 
 
-def create_role(db: Session, role: RoleCreate):
+def create_role(
+    db: Session,
+    role: RoleCreate,
+    *,
+    actor_id: int | None = None,
+):
 
     db_role = Role(
         name=role.name,
@@ -24,6 +30,15 @@ def create_role(db: Session, role: RoleCreate):
     )
 
     db.add(db_role)
+    db.flush()
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="role.create",
+        resource_type="role",
+        resource_id=db_role.id,
+        after={"name": db_role.name, "description": db_role.description},
+    )
     db.commit()
     db.refresh(db_role)
 
@@ -41,7 +56,13 @@ def get_role(db: Session, role_id: int):
         .first()
     )
 
-def update_role(db: Session, role_id: int, role: RoleUpdate):
+def update_role(
+    db: Session,
+    role_id: int,
+    role: RoleUpdate,
+    *,
+    actor_id: int | None = None,
+):
 
     db_role = get_role(db, role_id)
 
@@ -58,15 +79,30 @@ def update_role(db: Session, role_id: int, role: RoleUpdate):
             detail="Default system role names cannot be changed.",
         )
 
+    before = {"name": db_role.name, "description": db_role.description}
     for key, value in update_data.items():
         setattr(db_role, key, value)
 
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="role.update",
+        resource_type="role",
+        resource_id=db_role.id,
+        before=before,
+        after={"name": db_role.name, "description": db_role.description},
+    )
     db.commit()
     db.refresh(db_role)
 
     return db_role
 
-def delete_role(db: Session, role_id: int):
+def delete_role(
+    db: Session,
+    role_id: int,
+    *,
+    actor_id: int | None = None,
+):
 
     db_role = get_role(db, role_id)
 
@@ -89,6 +125,15 @@ def delete_role(db: Session, role_id: int):
             detail="Roles assigned to employees cannot be deleted.",
         )
 
+    before = {"name": db_role.name, "description": db_role.description}
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="role.delete",
+        resource_type="role",
+        resource_id=db_role.id,
+        before=before,
+    )
     db.delete(db_role)
     db.commit()
 

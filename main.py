@@ -21,6 +21,7 @@ from routers import (
     leave,
     salary,
     auth,
+    audit,
     ai_chat,
     reports,
     notifications,
@@ -107,6 +108,12 @@ app.include_router(
     auth.router,
     prefix="/auth",
     tags=["Authentication"]
+)
+
+app.include_router(
+    audit.router,
+    prefix="/audit-logs",
+    tags=["Audit Logs"]
 )
 
 app.include_router(
