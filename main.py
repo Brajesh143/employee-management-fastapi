@@ -21,9 +21,13 @@ from routers import (
     leave,
     salary,
     auth,
+    audit,
     ai_chat,
     reports,
     notifications,
+    expense,
+    performance,
+    recruitment,
 )
 from models.shift import Shift  # noqa: F401
 from models.holiday import Holiday  # noqa: F401
@@ -32,6 +36,11 @@ from models.wfh_request import WfhRequest  # noqa: F401
 from models.attendance_correction import AttendanceCorrection  # noqa: F401
 from models.audit_log import AuditLog  # noqa: F401
 from models.notification import Notification  # noqa: F401
+from models.performance_review import PerformanceReview  # noqa: F401
+from models.performance_goal import PerformanceGoal  # noqa: F401
+from models.job_opening import JobOpening  # noqa: F401
+from models.candidate import Candidate  # noqa: F401
+from models.interview import Interview  # noqa: F401
 from core.logging_config import setup_logging
 
 load_dotenv()
@@ -100,13 +109,37 @@ app.include_router(
 app.include_router(
     salary.router,
     prefix="/salaries",
-    tags=["Salary"]
+    tags=["Payroll and Salaries"]
+)
+
+app.include_router(
+    expense.router,
+    prefix="/expenses",
+    tags=["Expenses and Reimbursements"],
+)
+
+app.include_router(
+    performance.router,
+    prefix="/performance",
+    tags=["Performance and Goals"],
+)
+
+app.include_router(
+    recruitment.router,
+    prefix="/recruitment",
+    tags=["Recruitment"],
 )
 
 app.include_router(
     auth.router,
     prefix="/auth",
     tags=["Authentication"]
+)
+
+app.include_router(
+    audit.router,
+    prefix="/audit-logs",
+    tags=["Audit Logs"]
 )
 
 app.include_router(

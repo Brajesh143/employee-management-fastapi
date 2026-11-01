@@ -31,6 +31,7 @@ from services.employee_documents import (
     get_employee_documents,
 )
 from services.employee_document_storage import get_document_storage
+from services.audit import write_audit_log
 
 router = APIRouter()
 
@@ -66,7 +67,7 @@ def create_employee_api(
     ensure_role_assignment_allowed(db, current_user, employee.role_id)
 
     try:
-        return crud.create_employee(db, employee)
+        return crud.create_employee(db, employee, actor_id=current_user.id)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -213,6 +214,7 @@ async def upload_employee_document(
     employee_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
     employee = crud.get_employee(db, employee_id)
     if employee is None:
@@ -226,6 +228,7 @@ async def upload_employee_document(
             file.filename or "",
             content,
             get_document_storage(),
+            actor_id=current_user.id,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -248,7 +251,11 @@ def list_employee_documents(employee_id: int, db: Session = Depends(get_db)):
     "/documents/{document_id}/download",
     dependencies=[Depends(require_permission("document:manage"))],
 )
-def download_employee_document(document_id: int, db: Session = Depends(get_db)):
+def download_employee_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
     document = get_employee_document(db, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -257,6 +264,19 @@ def download_employee_document(document_id: int, db: Session = Depends(get_db)):
         stream = get_document_storage().open(document.storage_key)
     except FileNotFoundError as error:
         raise HTTPException(status_code=404, detail="Document file not found") from error
+
+    write_audit_log(
+        db,
+        actor_id=current_user.id,
+        action="employee.document.download",
+        resource_type="employee_document",
+        resource_id=document.id,
+        after={
+            "employee_id": document.employee_id,
+            "file_name": document.file_name,
+        },
+    )
+    db.commit()
 
     def content_chunks():
         with stream:
@@ -285,6 +305,7 @@ def exit_employee(
     employee_id: int,
     exit_request: EmployeeExitRequest,
     db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
     try:
         employee = crud.exit_employee(
@@ -292,6 +313,7 @@ def exit_employee(
             employee_id,
             exit_request.exit_date,
             exit_request.exit_reason,
+            actor_id=current_user.id,
         )
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -340,7 +362,12 @@ def update_employee(
         ensure_role_assignment_allowed(db, current_user, employee.role_id)
 
     try:
-        updated_employee = crud.update_employee(employee_id, employee, db)
+        updated_employee = crud.update_employee(
+            employee_id,
+            employee,
+            db,
+            actor_id=current_user.id,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -357,10 +384,15 @@ def update_employee(
     response_model=EmployeeResponse,
     dependencies=[Depends(require_permission("employee:delete"))]
 )
-def delete_employee(employee_id: int, db: Session = Depends(get_db)):
+def delete_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
     deleted_employee = crud.delete_employee(
         db,
-        employee_id
+        employee_id,
+        actor_id=current_user.id,
     )
 
     if not deleted_employee:

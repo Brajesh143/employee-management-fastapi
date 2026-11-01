@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from auth.permissions import get_role_permissions
 from database import get_db
 from crud.auth import (
     change_password,
@@ -76,6 +77,18 @@ def get_current_employee(
     """
 
     return current_user
+
+
+@router.get(
+    "/me/permissions",
+    response_model=list[str],
+    summary="Get current employee permissions",
+)
+def get_current_employee_permissions(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+) -> list[str]:
+    return sorted(get_role_permissions(db, current_user.role_id))
 
 
 # ==============================

@@ -131,6 +131,78 @@ requires `permission:manage`. Role permission assignments can be inspected with
 Super Admin always retains every permission; newly created permission
 definitions are automatically assigned to Super Admin roles.
 
+Audit history is available in the Streamlit **Audit logs** page and through
+`GET /audit-logs/`. Access requires `audit:read`. The endpoint supports
+pagination and filtering by actor, action, resource, and date range. Employee,
+role, permission, attendance, and leave changes record before/after snapshots; employee
+snapshots exclude password hashes and other authentication secrets.
+
+Attendance self-service is available from the Streamlit **Attendance** page.
+Employees can check in and out, view their attendance history, request WFH, and
+submit corrections. Managers and authorized HR/Admin users can review requests
+within their reporting scope. The attendance report supports date ranges and
+optional department filtering; report access requires `report:read`.
+Check-in/check-out endpoints are `POST /attendance/check-in` and
+`POST /attendance/check-out`; correction requests use
+`POST /attendance/corrections`.
+
+Leave self-service is available from the Streamlit **Leave Management** page.
+Employees can apply for leave, view their balance and request history, and
+cancel pending requests or approved requests before their start date. Leave
+days are counted inclusively as calendar days. Requests for employees with an
+assigned manager first require that manager's approval, then final HR approval;
+employees without an assigned manager go directly to HR. HR/Admin balance
+changes and all leave decisions are recorded in the audit log.
+
+The leave API is under `/leaves`: `GET /leaves/balance/me` reads the signed-in
+user's balance, `PATCH /leaves/balance/{employee_id}` adjusts a balance,
+`POST /leaves/{leave_id}/cancel` cancels a request, and
+`GET /leaves/reports?from=YYYY-MM-DD&to=YYYY-MM-DD` returns scoped leave history
+and totals. Balance changes require `leave:balance:manage`,
+leave actions use the relevant `leave:*` permissions, and reports require
+`report:read` or `report:team:read` together with `leave:read`.
+Apply the migration and refresh the role permissions before using the updated
+workflow:
+
+```bash
+./myenv/bin/alembic upgrade head
+./myenv/bin/python seed/run_seed.py
+```
+
+Payroll and expense workflows are available from the Streamlit **Payroll &
+Expenses** page and the `/salaries` and `/expenses` APIs. Users with
+`salary:create` can configure an employee's salary structure with an effective
+date. Users with `payroll:generate` can generate monthly payroll; existing
+entries and employees without an effective salary structure are skipped.
+Employees with `payslip:read` can view and download their own payslips, while
+`salary:read` grants broader payroll access.
+
+Employees submit claims through `POST /expenses/` and attach PDF, PNG, or JPEG
+receipts through `POST /expenses/{claim_id}/receipt` (maximum 10 MB).
+`expense:approve` reviewers approve or reject claims; approved claims become
+eligible for payment. Users with `reimbursement:approve` mark approved claims
+as reimbursed. Expense visibility follows employee/manager scope unless the
+user has organization-wide access. These changes are recorded in the audit log.
+
+Performance and recruitment are available from the Streamlit
+**Performance & Recruitment** page and the `/performance` and `/recruitment`
+APIs. Managers and HR can create draft or completed reviews for employees in
+their authorized scope; employees can read their own reviews. Draft reviews
+can be edited by the original reviewer and become immutable when completed.
+Managers and HR assign goals with measurable KPI targets and due dates;
+employees can update their own progress and status.
+
+Users with `recruitment:manage` can create and close job openings, add
+candidates to open roles, move candidates through screening, interview, offer,
+hire, and rejection stages, and schedule or update interviews with active
+employees. Review, goal, opening, candidate, and interview changes are recorded
+in the audit log. Apply the migration and refresh role permissions before use:
+
+```bash
+./myenv/bin/alembic upgrade head
+./myenv/bin/python seed/run_seed.py
+```
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

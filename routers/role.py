@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from auth.dependencies import get_current_user
 from database import get_db
 from auth.permissions import require_permission
+from models.employee import Employee
 from schemas.role import RoleCreate, RoleResponse, RoleUpdate
 import crud.role as crud
 
@@ -14,11 +16,13 @@ router = APIRouter()
 )
 def create_role(
     role: RoleCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
     return crud.create_role(
         db,
-        role
+        role,
+        actor_id=current_user.id,
     )
 
 @router.get(
@@ -58,12 +62,14 @@ def get_role(role_id: int, db: Session = Depends(get_db)):
 def update_role(
     role_id: int,
     role: RoleUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
 ):
     updated_role = crud.update_role(
         db,
         role_id,
-        role
+        role,
+        actor_id=current_user.id,
     )
 
     if not updated_role:
@@ -80,10 +86,15 @@ def update_role(
     response_model=RoleResponse,
     dependencies=[Depends(require_permission("role:delete"))]
 )
-def delete_role(role_id: int, db: Session = Depends(get_db)):
+def delete_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
     deleted_role = crud.delete_role(
         db,
-        role_id
+        role_id,
+        actor_id=current_user.id,
     )
 
     if not deleted_role:

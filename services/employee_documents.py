@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from models.employee import Employee
 from models.employee_document import EmployeeDocument
+from services.audit import write_audit_log
 from services.employee_document_storage import DocumentStorage
 
 MAX_DOCUMENT_SIZE = 10 * 1024 * 1024
@@ -22,6 +23,8 @@ def create_employee_document(
     file_name: str,
     content: bytes,
     storage: DocumentStorage,
+    *,
+    actor_id: int | None = None,
 ) -> EmployeeDocument:
     safe_name = PurePosixPath(file_name.replace("\\", "/")).name.strip()
     if not safe_name or len(safe_name) > 255:
@@ -49,6 +52,20 @@ def create_employee_document(
     )
     try:
         db.add(document)
+        db.flush()
+        write_audit_log(
+            db,
+            actor_id=actor_id,
+            action="employee.document.upload",
+            resource_type="employee_document",
+            resource_id=document.id,
+            after={
+                "employee_id": employee.id,
+                "file_name": document.file_name,
+                "content_type": document.content_type,
+                "file_size": document.file_size,
+            },
+        )
         db.commit()
         db.refresh(document)
     except Exception:

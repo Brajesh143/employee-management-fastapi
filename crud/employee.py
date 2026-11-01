@@ -12,6 +12,7 @@ from models.role import Role  # noqa: F401
 from models.shift import Shift  # noqa: F401
 from schemas.employee import EmployeeCreate, EmployeeUpdate
 from auth.hashing import Hash
+from services.audit import employee_audit_snapshot, write_audit_log
 from services.employee_document_storage import get_document_storage
 
 
@@ -61,7 +62,12 @@ def _validate_assignment(
             raise ValueError("Designation must exist and be active.")
 
 
-def create_employee(db: Session, employee: EmployeeCreate):
+def create_employee(
+    db: Session,
+    employee: EmployeeCreate,
+    *,
+    actor_id: int | None = None,
+):
     _validate_assignment(
         db,
         employee_id=None,
@@ -90,6 +96,15 @@ def create_employee(db: Session, employee: EmployeeCreate):
     )
 
     db.add(db_employee)
+    db.flush()
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="employee.create",
+        resource_type="employee",
+        resource_id=db_employee.id,
+        after=employee_audit_snapshot(db_employee),
+    )
     db.commit()
     db.refresh(db_employee)
 
@@ -233,7 +248,13 @@ def get_employee(db: Session, employee_id: int):
         .first()
     )
 
-def update_employee(employee_id: int, employee: EmployeeUpdate, db: Session):
+def update_employee(
+    employee_id: int,
+    employee: EmployeeUpdate,
+    db: Session,
+    *,
+    actor_id: int | None = None,
+):
     db_employee = get_employee(db, employee_id)
 
     if not db_employee:
@@ -250,9 +271,19 @@ def update_employee(employee_id: int, employee: EmployeeUpdate, db: Session):
         designation_id=update_data.get("designation_id", db_employee.designation_id),
     )
 
+    before = employee_audit_snapshot(db_employee)
     for key, value in update_data.items():
         setattr(db_employee, key, value)
 
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="employee.update",
+        resource_type="employee",
+        resource_id=db_employee.id,
+        before=before,
+        after=employee_audit_snapshot(db_employee),
+    )
     db.commit()
     db.refresh(db_employee)
 
@@ -264,6 +295,8 @@ def exit_employee(
     employee_id: int,
     exit_date: date,
     exit_reason: str,
+    *,
+    actor_id: int | None = None,
 ):
     db_employee = get_employee(db, employee_id)
 
@@ -273,17 +306,32 @@ def exit_employee(
     if db_employee.exit_date is not None:
         raise ValueError("Employee has already been exited.")
 
+    before = employee_audit_snapshot(db_employee)
     db_employee.exit_date = exit_date
     db_employee.exit_reason = exit_reason
     db_employee.is_active = False
     db_employee.status = "Exited"
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="employee.exit",
+        resource_type="employee",
+        resource_id=db_employee.id,
+        before=before,
+        after=employee_audit_snapshot(db_employee),
+    )
     db.commit()
     db.refresh(db_employee)
 
     return db_employee
 
 
-def delete_employee(db: Session, employee_id: int):
+def delete_employee(
+    db: Session,
+    employee_id: int,
+    *,
+    actor_id: int | None = None,
+):
     db_employee = get_employee(db, employee_id)
 
     if db_employee is None:
@@ -292,6 +340,15 @@ def delete_employee(db: Session, employee_id: int):
     storage_keys = [
         document.storage_key for document in db_employee.documents
     ]
+    before = employee_audit_snapshot(db_employee)
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="employee.delete",
+        resource_type="employee",
+        resource_id=db_employee.id,
+        before=before,
+    )
     db.delete(db_employee)
     db.commit()
     storage = get_document_storage()

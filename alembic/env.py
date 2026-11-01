@@ -14,6 +14,13 @@ from models.employee import Employee
 from models.attendence import Attendance
 from models.leave import Leave
 from models.salary import Salary
+from models.salary_structure import SalaryStructure
+from models.expense_claim import ExpenseClaim
+from models.performance_review import PerformanceReview
+from models.performance_goal import PerformanceGoal
+from models.job_opening import JobOpening
+from models.candidate import Candidate
+from models.interview import Interview
 from models.shift import Shift
 from models.holiday import Holiday
 from models.attendance_policy import AttendancePolicy

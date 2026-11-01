@@ -4,10 +4,20 @@ from sqlalchemy.orm import Session
 
 from models.attendence import Attendance
 from schemas.attendence import AttendanceCreate, AttendanceUpdate
-from services.attendance import apply_metrics, get_or_create_default_shift
+from services.audit import write_audit_log
+from services.attendance import (
+    apply_metrics,
+    attendance_snapshot,
+    get_or_create_default_shift,
+)
 
 
-def create_attendance(db: Session, attendance: AttendanceCreate):
+def create_attendance(
+    db: Session,
+    attendance: AttendanceCreate,
+    *,
+    actor_id: int | None = None,
+):
     shift = get_or_create_default_shift(db)
     db_attendance = Attendance(
         employee_id=attendance.employee_id,
@@ -24,6 +34,15 @@ def create_attendance(db: Session, attendance: AttendanceCreate):
         db_attendance.status = attendance.status
 
     db.add(db_attendance)
+    db.flush()
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="attendance.create",
+        resource_type="attendance",
+        resource_id=db_attendance.id,
+        after=attendance_snapshot(db_attendance),
+    )
     db.commit()
     db.refresh(db_attendance)
     return db_attendance
@@ -37,25 +56,54 @@ def get_attendance(db: Session, attendance_id: int):
     return db.query(Attendance).filter(Attendance.id == attendance_id).first()
 
 
-def update_attendance(db: Session, attendance_id: int, attendance: AttendanceUpdate):
+def update_attendance(
+    db: Session,
+    attendance_id: int,
+    attendance: AttendanceUpdate,
+    *,
+    actor_id: int | None = None,
+):
     db_attendance = get_attendance(db, attendance_id)
     if not db_attendance:
         return None
 
     update_data = attendance.model_dump(exclude_unset=True)
+    before = attendance_snapshot(db_attendance)
     for key, value in update_data.items():
         setattr(db_attendance, key, value)
 
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="attendance.update",
+        resource_type="attendance",
+        resource_id=db_attendance.id,
+        before=before,
+        after=attendance_snapshot(db_attendance),
+    )
     db.commit()
     db.refresh(db_attendance)
     return db_attendance
 
 
-def delete_attendance(db: Session, attendance_id: int):
+def delete_attendance(
+    db: Session,
+    attendance_id: int,
+    *,
+    actor_id: int | None = None,
+):
     db_attendance = get_attendance(db, attendance_id)
     if not db_attendance:
         return None
 
+    write_audit_log(
+        db,
+        actor_id=actor_id,
+        action="attendance.delete",
+        resource_type="attendance",
+        resource_id=db_attendance.id,
+        before=attendance_snapshot(db_attendance),
+    )
     db.delete(db_attendance)
     db.commit()
     return db_attendance

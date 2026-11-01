@@ -18,6 +18,7 @@ from models.employee import Employee
 from models.permission import Permission
 from models.role import Role
 from models.role_permission import RolePermission
+from routers.permission import router as permission_router
 from schemas.role import RoleUpdate
 
 
@@ -206,6 +207,32 @@ def test_role_wildcard_grants_all_permissions(rbac_db: Session):
 
     assert has_permission(rbac_db, employee, "ai:chat")
     assert has_permission(rbac_db, employee, "system:config")
+
+
+def test_permission_catalog_allows_permission_managers_and_role_assigners(
+    rbac_db: Session,
+):
+    route = next(
+        route
+        for route in permission_router.routes
+        if isinstance(route, APIRoute)
+        and route.path == "/"
+        and "GET" in route.methods
+    )
+    checker = next(
+        dependency.call
+        for dependency in route.dependant.dependencies
+        if getattr(dependency.call, "__name__", "") == "permission_checker"
+    )
+    admin_role = _create_role(rbac_db, "Admin", "role:assign")
+    employee_role = _create_role(rbac_db, "Employee", "attendance:read")
+    admin = _create_employee(rbac_db, "ADM002", admin_role)
+    employee = _create_employee(rbac_db, "EMP004", employee_role)
+
+    assert checker(current_user=admin, db=rbac_db) is admin
+    with pytest.raises(HTTPException) as error:
+        checker(current_user=employee, db=rbac_db)
+    assert error.value.status_code == 403
 
 
 def test_ai_permission_is_checked_and_system_roles_are_protected(

@@ -18,10 +18,14 @@ SELF_SERVICE_PERMISSIONS = {
     "leave:read",
     "leave:cancel",
     "payslip:read",
+    "performance:read",
+    "performance:goal:update",
 }
 ADMIN_DELEGABLE_PERMISSIONS = {
     "employee:team:read",
     "performance:review",
+    "performance:read",
+    "performance:goal:manage",
     "report:team:read",
 }
 

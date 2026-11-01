@@ -5,9 +5,15 @@ from database.database import Base
 from models.permission import Permission
 from models.role import Role
 from models.role_permission import RolePermission
+from schemas.role import RoleCreate, RoleResponse, RoleUpdate
 from seed.permissions import seed_permissions
 from seed.role_permissions import seed_role_permissions
 from seed.roles import DEFAULT_ROLES, seed_roles
+
+
+def test_hr_role_name_is_valid_for_role_requests_and_responses():
+    assert RoleCreate(name="HR").name == "HR"
+    assert RoleUpdate(name="HR").name == "HR"
 
 
 def test_seed_roles_and_permissions_creates_catalog_and_preserves_custom_roles():
@@ -18,6 +24,9 @@ def test_seed_roles_and_permissions_creates_catalog_and_preserves_custom_roles()
         seed_roles(db)
         seed_permissions(db)
         seed_role_permissions(db)
+
+        hr_role = db.query(Role).filter(Role.name == "HR").one()
+        assert RoleResponse.model_validate(hr_role).name == "HR"
 
         assert {
             role.name for role in db.query(Role).all()
