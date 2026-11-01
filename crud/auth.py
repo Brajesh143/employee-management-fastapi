@@ -8,8 +8,10 @@ from auth.hashing import Hash
 from auth.jwt import JWTHandler
 from models.employee import Employee
 from models.revoked_token import RevokedToken
-from schemas.auth import LoginRequest, ChangePassword
-
+from schemas.auth import (
+    ChangePassword,
+    LoginRequest,
+)
 
 def get_employee_by_email(
     db: Session,

@@ -71,34 +71,6 @@ class ChangePassword(BaseModel):
         return password
 
 
-class ForgotPassword(BaseModel):
-    """
-    Forgot Password Request
-    """
-
-    email: str
-
-
-class ResetPassword(BaseModel):
-    """
-    Reset Password
-    """
-
-    token: str
-
-    new_password: str = Field(
-        ...,
-        min_length=8,
-        max_length=72,
-    )
-
-    confirm_password: str = Field(
-        ...,
-        min_length=8,
-        max_length=72,
-    )
-
-
 class RefreshToken(BaseModel):
     """
     Refresh Access Token

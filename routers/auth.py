@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from crud.auth import login_employee, change_password, revoke_access_token
+from crud.auth import (
+    change_password,
+    login_employee,
+    revoke_access_token,
+)
 from auth.dependencies import get_current_active_user, oauth2_scheme
 from models.employee import Employee
 from schemas.auth import (
@@ -12,6 +16,7 @@ from schemas.auth import (
 )
 from schemas.employee import EmployeeResponse
 
+# Email-based password reset routes are disabled until SMTP is configured.
 router = APIRouter()
 
 

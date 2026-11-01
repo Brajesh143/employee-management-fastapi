@@ -106,6 +106,11 @@ New passwords are stored with bcrypt. Existing salted SHA-256 password hashes
 for passwords up to 72 UTF-8 bytes are upgraded to bcrypt on successful login;
 longer legacy passwords remain verifiable until changed.
 
+SMTP-based password reset is disabled until SMTP is configured. Signed-in users
+can change their password from the **Change password** page; the current
+password is required and all existing sessions are invalidated after a
+successful change. Users who cannot sign in must contact an administrator.
+
 In another terminal:
 
 ```bash
