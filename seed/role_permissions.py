@@ -63,6 +63,12 @@ ROLE_PERMISSIONS = {
         "reimbursement:read",
         "reimbursement:approve",
 
+        "performance:review",
+        "performance:read",
+        "performance:goal:manage",
+        "performance:goal:update",
+        "recruitment:manage",
+
         "report:read",
         "audit:read",
         "notification:manage",
@@ -102,6 +108,10 @@ ROLE_PERMISSIONS = {
         "expense:update",
         "expense:approve",
         "reimbursement:read",
+        "performance:review",
+        "performance:read",
+        "performance:goal:manage",
+        "performance:goal:update",
         "recruitment:manage",
 
         "report:read",
@@ -139,6 +149,10 @@ ROLE_PERMISSIONS = {
         "expense:update",
         "expense:approve",
         "reimbursement:read",
+        "performance:review",
+        "performance:read",
+        "performance:goal:manage",
+        "performance:goal:update",
         "recruitment:manage",
         "report:read",
         "notification:manage",
@@ -164,6 +178,8 @@ ROLE_PERMISSIONS = {
         "expense:read",
         "expense:approve",
         "performance:review",
+        "performance:read",
+        "performance:goal:manage",
     ],
 
     "Finance": [
@@ -194,6 +210,8 @@ ROLE_PERMISSIONS = {
         "expense:create",
         "expense:read",
         "payslip:read",
+        "performance:read",
+        "performance:goal:update",
         "ai:chat",
     ],
 

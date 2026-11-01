@@ -1822,6 +1822,546 @@ def ai_assistant_page():
         })
 
 
+def performance_recruitment_page():
+    st.title("📈 Performance & Recruitment")
+    user = st.session_state.user or {}
+    employee_id = user.get("id")
+    permissions = set(st.session_state.permissions or [])
+    has_all_permissions = "*" in permissions
+
+    can_read_performance = has_all_permissions or bool(
+        permissions.intersection(
+            {"performance:read", "performance:review", "performance:goal:manage"}
+        )
+    )
+    can_write_reviews = has_all_permissions or "performance:review" in permissions
+    can_manage_goals = has_all_permissions or (
+        "performance:goal:manage" in permissions
+    )
+    can_update_goals = has_all_permissions or bool(
+        permissions.intersection(
+            {"performance:goal:update", "performance:goal:manage"}
+        )
+    )
+    can_manage_recruitment = has_all_permissions or (
+        "recruitment:manage" in permissions
+    )
+
+    tab_names = []
+    if can_read_performance or can_write_reviews or can_update_goals:
+        tab_names.extend(["Reviews", "Goals"])
+    if can_manage_recruitment:
+        tab_names.append("Recruitment")
+    if not tab_names:
+        st.info("Your role has no performance or recruitment permissions.")
+        return
+    tabs = dict(zip(tab_names, st.tabs(tab_names), strict=True))
+
+    if "Reviews" in tabs:
+        with tabs["Reviews"]:
+            if can_write_reviews:
+                st.subheader("Create performance review")
+                with st.form("performance_review_form"):
+                    review_employee_id = st.number_input(
+                        "Employee ID",
+                        min_value=1,
+                        value=int(employee_id or 1),
+                        step=1,
+                        key="review_employee_id",
+                    )
+                    review_period = st.columns(2)
+                    period_start = review_period[0].date_input(
+                        "Period start",
+                        value=date(date.today().year, 1, 1),
+                    )
+                    period_end = review_period[1].date_input(
+                        "Period end",
+                        value=date.today(),
+                    )
+                    rating = st.slider("Rating (1–5)", 1.0, 5.0, 3.0, 0.5)
+                    strengths = st.text_area("Strengths")
+                    improvement_areas = st.text_area("Areas to improve")
+                    review_comments = st.text_area("Additional comments")
+                    review_status = st.selectbox("Review status", ["Draft", "Completed"])
+                    review_submitted = st.form_submit_button(
+                        "Save review",
+                        type="primary",
+                    )
+                if review_submitted:
+                    result = api_request(
+                        "POST",
+                        "/performance/reviews",
+                        json={
+                            "employee_id": int(review_employee_id),
+                            "period_start": period_start.isoformat(),
+                            "period_end": period_end.isoformat(),
+                            "rating": rating,
+                            "strengths": strengths,
+                            "areas_to_improve": improvement_areas,
+                            "comments": review_comments or None,
+                            "status": review_status,
+                        },
+                    )
+                    if result is not None:
+                        st.success("Performance review saved.")
+                        st.rerun()
+
+            reviews = api_request("GET", "/performance/reviews")
+            if reviews:
+                st.subheader("Performance review history")
+                st.dataframe(
+                    pd.DataFrame(reviews),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            elif reviews is not None:
+                st.info("No performance reviews found.")
+
+    if "Goals" in tabs:
+        with tabs["Goals"]:
+            if can_manage_goals:
+                st.subheader("Create goal or KPI")
+                with st.form("performance_goal_form"):
+                    goal_employee_id = st.number_input(
+                        "Goal owner employee ID",
+                        min_value=1,
+                        value=int(employee_id or 1),
+                        step=1,
+                        key="goal_employee_id",
+                    )
+                    goal_title = st.text_input("Goal title")
+                    goal_description = st.text_area("Description")
+                    metric_columns = st.columns(3)
+                    goal_metric = metric_columns[0].text_input(
+                        "KPI / metric",
+                        placeholder="e.g. Customer satisfaction",
+                    )
+                    goal_target = metric_columns[1].number_input(
+                        "Target value",
+                        min_value=0.01,
+                        step=1.0,
+                    )
+                    goal_unit = metric_columns[2].text_input(
+                        "Unit",
+                        placeholder="e.g. points, %",
+                    )
+                    goal_due_date = st.date_input("Due date", value=date.today())
+                    goal_submitted = st.form_submit_button(
+                        "Create goal",
+                        type="primary",
+                    )
+                if goal_submitted:
+                    result = api_request(
+                        "POST",
+                        "/performance/goals",
+                        json={
+                            "employee_id": int(goal_employee_id),
+                            "title": goal_title,
+                            "description": goal_description,
+                            "metric": goal_metric,
+                            "target_value": goal_target,
+                            "current_value": 0,
+                            "unit": goal_unit,
+                            "due_date": goal_due_date.isoformat(),
+                        },
+                    )
+                    if result is not None:
+                        st.success("Performance goal created.")
+                        st.rerun()
+
+            goals = api_request("GET", "/performance/goals")
+            if goals:
+                st.subheader("Goal and KPI tracking")
+                goal_table = pd.DataFrame(goals)
+                st.dataframe(goal_table, use_container_width=True, hide_index=True)
+                if can_update_goals:
+                    st.subheader("Update goal progress")
+                    with st.form("performance_goal_progress_form"):
+                        selected_goal_id = st.selectbox(
+                            "Goal",
+                            [goal["id"] for goal in goals],
+                            format_func=lambda value: next(
+                                (
+                                    f"{goal['title']} · {goal['current_value']}/"
+                                    f"{goal['target_value']} {goal['unit']}"
+                                    for goal in goals
+                                    if goal["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        selected_goal = next(
+                            goal for goal in goals if goal["id"] == selected_goal_id
+                        )
+                        progress_columns = st.columns(2)
+                        current_value = progress_columns[0].number_input(
+                            "Current value",
+                            min_value=0.0,
+                            value=float(selected_goal["current_value"]),
+                            step=1.0,
+                        )
+                        goal_status = progress_columns[1].selectbox(
+                            "Status",
+                            ["Not started", "In progress", "Completed", "At risk"],
+                            index=[
+                                "Not started",
+                                "In progress",
+                                "Completed",
+                                "At risk",
+                            ].index(selected_goal["status"]),
+                        )
+                        progress_submitted = st.form_submit_button(
+                            "Save progress",
+                            type="primary",
+                        )
+                    if progress_submitted:
+                        result = api_request(
+                            "PATCH",
+                            f"/performance/goals/{selected_goal_id}/progress",
+                            json={
+                                "current_value": current_value,
+                                "status": goal_status,
+                            },
+                        )
+                        if result is not None:
+                            st.success("Goal progress updated.")
+                            st.rerun()
+            elif goals is not None:
+                st.info("No performance goals found.")
+
+    if "Recruitment" in tabs:
+        with tabs["Recruitment"]:
+            recruitment_tabs = st.tabs(["Job openings", "Candidates", "Interviews"])
+
+            with recruitment_tabs[0]:
+                st.subheader("Create job opening")
+                with st.form("job_opening_form"):
+                    opening_columns = st.columns(2)
+                    opening_title = opening_columns[0].text_input("Job title")
+                    opening_department = opening_columns[1].text_input("Department")
+                    opening_location = opening_columns[0].text_input("Location")
+                    opening_type = opening_columns[1].selectbox(
+                        "Employment type",
+                        ["Full-time", "Part-time", "Contract", "Internship"],
+                    )
+                    opening_description = st.text_area("Job description")
+                    opening_dates = st.columns(2)
+                    opened_on = opening_dates[0].date_input(
+                        "Opening date",
+                        value=date.today(),
+                    )
+                    closes_on = opening_dates[1].date_input(
+                        "Closing date (optional)",
+                        value=None,
+                    )
+                    opening_submitted = st.form_submit_button(
+                        "Create opening",
+                        type="primary",
+                    )
+                if opening_submitted:
+                    result = api_request(
+                        "POST",
+                        "/recruitment/openings",
+                        json={
+                            "title": opening_title,
+                            "department": opening_department,
+                            "location": opening_location,
+                            "employment_type": opening_type,
+                            "description": opening_description,
+                            "opened_on": opened_on.isoformat(),
+                            "closes_on": (
+                                closes_on.isoformat() if closes_on else None
+                            ),
+                        },
+                    )
+                    if result is not None:
+                        st.success("Job opening created.")
+                        st.rerun()
+
+                openings = api_request("GET", "/recruitment/openings")
+                if openings:
+                    st.subheader("Openings")
+                    st.dataframe(
+                        pd.DataFrame(openings),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    with st.form("job_opening_status_form"):
+                        selected_opening_id = st.selectbox(
+                            "Opening to update",
+                            [opening["id"] for opening in openings],
+                            format_func=lambda value: next(
+                                (
+                                    f"{opening['title']} · {opening['status']}"
+                                    for opening in openings
+                                    if opening["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        selected_opening = next(
+                            opening
+                            for opening in openings
+                            if opening["id"] == selected_opening_id
+                        )
+                        opening_status = st.selectbox(
+                            "Opening status",
+                            ["Open", "On hold", "Closed"],
+                            index=["Open", "On hold", "Closed"].index(
+                                selected_opening["status"]
+                            ),
+                        )
+                        opening_status_submitted = st.form_submit_button(
+                            "Update opening"
+                        )
+                    if opening_status_submitted:
+                        result = api_request(
+                            "PATCH",
+                            f"/recruitment/openings/{selected_opening_id}",
+                            json={"status": opening_status},
+                        )
+                        if result is not None:
+                            st.success("Job opening updated.")
+                            st.rerun()
+                elif openings is not None:
+                    st.info("No job openings found.")
+
+            with recruitment_tabs[1]:
+                openings = api_request("GET", "/recruitment/openings")
+                if openings:
+                    st.subheader("Add candidate")
+                    with st.form("candidate_form"):
+                        opening_choices = [
+                            opening for opening in openings
+                            if opening["status"] == "Open"
+                        ]
+                        if opening_choices:
+                            candidate_opening_id = st.selectbox(
+                                "Job opening",
+                                [opening["id"] for opening in opening_choices],
+                                format_func=lambda value: next(
+                                    opening["title"]
+                                    for opening in opening_choices
+                                    if opening["id"] == value
+                                ),
+                            )
+                            candidate_columns = st.columns(2)
+                            candidate_name = candidate_columns[0].text_input(
+                                "Candidate name"
+                            )
+                            candidate_email = candidate_columns[1].text_input(
+                                "Candidate email"
+                            )
+                            candidate_phone = candidate_columns[0].text_input(
+                                "Phone"
+                            )
+                            candidate_source = candidate_columns[1].text_input(
+                                "Source"
+                            )
+                            candidate_resume = st.text_input("Resume URL")
+                            candidate_notes = st.text_area("Notes")
+                            candidate_submitted = st.form_submit_button(
+                                "Add candidate",
+                                type="primary",
+                            )
+                        else:
+                            st.info("Create an open job opening before adding candidates.")
+                            candidate_submitted = False
+                    if candidate_submitted:
+                        result = api_request(
+                            "POST",
+                            "/recruitment/candidates",
+                            json={
+                                "job_opening_id": candidate_opening_id,
+                                "full_name": candidate_name,
+                                "email": candidate_email,
+                                "phone": candidate_phone or None,
+                                "source": candidate_source or None,
+                                "resume_url": candidate_resume or None,
+                                "notes": candidate_notes or None,
+                            },
+                        )
+                        if result is not None:
+                            st.success("Candidate added.")
+                            st.rerun()
+
+                candidates = api_request("GET", "/recruitment/candidates")
+                if candidates:
+                    st.subheader("Candidate pipeline")
+                    st.dataframe(
+                        pd.DataFrame(candidates),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    with st.form("candidate_stage_form"):
+                        selected_candidate_id = st.selectbox(
+                            "Candidate",
+                            [candidate["id"] for candidate in candidates],
+                            format_func=lambda value: next(
+                                (
+                                    f"{candidate['full_name']} · "
+                                    f"{candidate['stage']}"
+                                    for candidate in candidates
+                                    if candidate["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        selected_candidate = next(
+                            candidate
+                            for candidate in candidates
+                            if candidate["id"] == selected_candidate_id
+                        )
+                        candidate_stage = st.selectbox(
+                            "Pipeline stage",
+                            [
+                                "Applied",
+                                "Screening",
+                                "Interview",
+                                "Offer",
+                                "Hired",
+                                "Rejected",
+                                "Withdrawn",
+                            ],
+                            index=[
+                                "Applied",
+                                "Screening",
+                                "Interview",
+                                "Offer",
+                                "Hired",
+                                "Rejected",
+                                "Withdrawn",
+                            ].index(selected_candidate["stage"]),
+                        )
+                        stage_submitted = st.form_submit_button("Update candidate")
+                    if stage_submitted:
+                        result = api_request(
+                            "PATCH",
+                            f"/recruitment/candidates/{selected_candidate_id}",
+                            json={"stage": candidate_stage},
+                        )
+                        if result is not None:
+                            st.success("Candidate stage updated.")
+                            st.rerun()
+                elif candidates is not None:
+                    st.info("No candidates found.")
+
+            with recruitment_tabs[2]:
+                candidates = api_request("GET", "/recruitment/candidates")
+                if candidates:
+                    st.subheader("Schedule interview")
+                    with st.form("interview_form"):
+                        interview_candidate_id = st.selectbox(
+                            "Candidate",
+                            [candidate["id"] for candidate in candidates],
+                            format_func=lambda value: next(
+                                candidate["full_name"]
+                                for candidate in candidates
+                                if candidate["id"] == value
+                            ),
+                        )
+                        interviewer_id = st.number_input(
+                            "Interviewer employee ID",
+                            min_value=1,
+                            value=int(employee_id or 1),
+                            step=1,
+                        )
+                        interview_date = st.date_input(
+                            "Interview date",
+                            value=date.today(),
+                        )
+                        interview_time = st.time_input(
+                            "Interview time",
+                            value=time(10, 0),
+                        )
+                        interview_columns = st.columns(2)
+                        interview_duration = interview_columns[0].number_input(
+                            "Duration (minutes)",
+                            min_value=15,
+                            max_value=480,
+                            value=60,
+                            step=15,
+                        )
+                        interview_type = interview_columns[1].selectbox(
+                            "Interview type",
+                            ["Phone", "Video", "In person", "Technical", "Panel"],
+                        )
+                        interview_notes = st.text_area("Interview notes")
+                        interview_submitted = st.form_submit_button(
+                            "Schedule interview",
+                            type="primary",
+                        )
+                    if interview_submitted:
+                        scheduled_at = datetime.combine(
+                            interview_date,
+                            interview_time,
+                        ).isoformat()
+                        result = api_request(
+                            "POST",
+                            "/recruitment/interviews",
+                            json={
+                                "candidate_id": interview_candidate_id,
+                                "interviewer_id": int(interviewer_id),
+                                "scheduled_at": scheduled_at,
+                                "duration_minutes": int(interview_duration),
+                                "interview_type": interview_type,
+                                "notes": interview_notes or None,
+                            },
+                        )
+                        if result is not None:
+                            st.success("Interview scheduled.")
+                            st.rerun()
+
+                interviews = api_request("GET", "/recruitment/interviews")
+                if interviews:
+                    st.subheader("Interview schedule")
+                    st.dataframe(
+                        pd.DataFrame(interviews),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    with st.form("interview_status_form"):
+                        selected_interview_id = st.selectbox(
+                            "Interview",
+                            [interview["id"] for interview in interviews],
+                            format_func=lambda value: next(
+                                (
+                                    f"#{interview['id']} · "
+                                    f"{interview['scheduled_at']} · "
+                                    f"{interview['status']}"
+                                    for interview in interviews
+                                    if interview["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        interview_status = st.selectbox(
+                            "Interview status",
+                            ["Scheduled", "Completed", "Cancelled"],
+                            index=["Scheduled", "Completed", "Cancelled"].index(
+                                next(
+                                    item["status"]
+                                    for item in interviews
+                                    if item["id"] == selected_interview_id
+                                )
+                            ),
+                        )
+                        interview_status_submitted = st.form_submit_button(
+                            "Update interview"
+                        )
+                    if interview_status_submitted:
+                        result = api_request(
+                            "PATCH",
+                            f"/recruitment/interviews/{selected_interview_id}",
+                            json={"status": interview_status},
+                        )
+                        if result is not None:
+                            st.success("Interview updated.")
+                            st.rerun()
+                elif interviews is not None:
+                    st.info("No interviews scheduled.")
+
+
 # ---------------- MAIN APP ----------------
 
 def main():
@@ -1882,6 +2422,17 @@ def main():
             page_options.insert(2, "Permission management")
         if "*" in current_permissions or "audit:read" in current_permissions:
             page_options.insert(3, "Audit logs")
+        if current_permissions.intersection(
+            {
+                "*",
+                "performance:read",
+                "performance:review",
+                "performance:goal:manage",
+                "performance:goal:update",
+                "recruitment:manage",
+            }
+        ):
+            page_options.insert(2, "Performance & Recruitment")
 
         page = st.radio("Navigation", page_options)
 
@@ -1913,6 +2464,8 @@ def main():
         leave_page()
     elif page == "Salary Management":
         salary_page()
+    elif page == "Performance & Recruitment":
+        performance_recruitment_page()
     elif page == "AI Assistant":
         ai_assistant_page()
     elif page == "Change password":

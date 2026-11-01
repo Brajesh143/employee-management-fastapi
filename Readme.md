@@ -184,6 +184,25 @@ eligible for payment. Users with `reimbursement:approve` mark approved claims
 as reimbursed. Expense visibility follows employee/manager scope unless the
 user has organization-wide access. These changes are recorded in the audit log.
 
+Performance and recruitment are available from the Streamlit
+**Performance & Recruitment** page and the `/performance` and `/recruitment`
+APIs. Managers and HR can create draft or completed reviews for employees in
+their authorized scope; employees can read their own reviews. Draft reviews
+can be edited by the original reviewer and become immutable when completed.
+Managers and HR assign goals with measurable KPI targets and due dates;
+employees can update their own progress and status.
+
+Users with `recruitment:manage` can create and close job openings, add
+candidates to open roles, move candidates through screening, interview, offer,
+hire, and rejection stages, and schedule or update interviews with active
+employees. Review, goal, opening, candidate, and interview changes are recorded
+in the audit log. Apply the migration and refresh role permissions before use:
+
+```bash
+./myenv/bin/alembic upgrade head
+./myenv/bin/python seed/run_seed.py
+```
+
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
 AI Security — Prompt Injection, Guardrails, PII, Permissions

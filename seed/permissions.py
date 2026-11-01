@@ -222,6 +222,18 @@ DEFAULT_PERMISSIONS = [
         "description": "Create and manage performance reviews"
     },
     {
+        "name": "performance:read",
+        "description": "View employee performance reviews and goals"
+    },
+    {
+        "name": "performance:goal:manage",
+        "description": "Create performance goals for employees"
+    },
+    {
+        "name": "performance:goal:update",
+        "description": "Update personal performance goal progress"
+    },
+    {
         "name": "recruitment:manage",
         "description": "Manage job openings, candidates, and interviews"
     },
