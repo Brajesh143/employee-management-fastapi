@@ -184,6 +184,22 @@ eligible for payment. Users with `reimbursement:approve` mark approved claims
 as reimbursed. Expense visibility follows employee/manager scope unless the
 user has organization-wide access. These changes are recorded in the audit log.
 
+Reporting and analytics are available through the Streamlit **Reporting &
+Analytics** page and `GET /reports/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+The dashboard and reports include in-scope employee statistics, attendance and
+leave summaries, monthly payroll totals, department comparisons, and employee
+attrition calculated from opening headcount and recorded exit dates. The
+attrition denominator includes employees with a recorded joining date on or
+before the report start and no earlier exit; employees without a joining date
+are excluded because their opening-period employment cannot be determined.
+Payroll, attendance, and leave sections are only returned to users with the
+corresponding read permissions; employee-level details follow employee/manager
+visibility scope. Download CSV or PDF reports with
+`GET /reports/{employees|attendance|leaves|payroll|departments|attrition}/export`,
+using the same date and optional `department_id` filters and `format=csv|pdf`.
+Report endpoints require `report:read` or `report:team:read`; the relevant data
+read permission is also required to export sensitive report sections.
+
 Performance and recruitment are available from the Streamlit
 **Performance & Recruitment** page and the `/performance` and `/recruitment`
 APIs. Managers and HR can create draft or completed reviews for employees in

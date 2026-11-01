@@ -201,18 +201,240 @@ def dashboard_page():
     st.title("📊 Dashboard")
     st.caption("Employee Management System overview")
 
-    col1, col2, col3, col4 = st.columns(4)
+    permissions = set(st.session_state.permissions or [])
+    if not permissions.intersection(
+        {"*", "report:read", "report:team:read"}
+    ):
+        st.info("Reporting access is not enabled for your role.")
+        return
 
-    # Replace these with your actual summary API endpoints.
-    col1.metric("Employees", "—")
-    col2.metric("Present Today", "—")
-    col3.metric("Pending Leaves", "—")
-    col4.metric("Departments", "—")
-
-    st.info(
-        "Connect your dashboard summary API to display "
-        "live employee statistics."
+    today = date.today()
+    report = api_request(
+        "GET",
+        "/reports/analytics",
+        params={
+            "from": today.replace(day=1).isoformat(),
+            "to": today.isoformat(),
+        },
     )
+    if report is None:
+        return
+
+    employee_stats = report.get("employees", {})
+    attendance_stats = report.get("attendance", {}).get("totals", {})
+    leave_stats = report.get("leaves", {}).get("totals", {})
+    department_stats = report.get("departments", [])
+    columns = st.columns(4)
+    columns[0].metric(
+        "Active employees",
+        employee_stats.get("active", "—"),
+    )
+    columns[1].metric(
+        "Present days",
+        attendance_stats.get("present_days", "—"),
+    )
+    columns[2].metric(
+        "Pending leave requests",
+        leave_stats.get("pending", "—"),
+    )
+    columns[3].metric(
+        "Departments in scope",
+        len(department_stats) if "departments" in report else "—",
+    )
+    if "payroll" in report:
+        payroll = report["payroll"]
+        st.metric(
+            "Period net payroll",
+            f"{payroll['net_pay']:,.2f}",
+            help="Payroll entries for the selected month-to-date period.",
+        )
+    if department_stats:
+        st.subheader("Department overview")
+        st.bar_chart(
+            pd.DataFrame(department_stats).set_index("department")[
+                ["active_employees"]
+            ]
+        )
+
+
+def reporting_analytics_page():
+    st.title("📊 Reporting & Analytics")
+    st.caption(
+        "Scoped employee, attendance, leave, payroll, department, and attrition reports."
+    )
+    permissions = set(st.session_state.permissions or [])
+    has_all_permissions = "*" in permissions
+
+    controls = st.columns(3)
+    start = controls[0].date_input(
+        "From",
+        value=date.today().replace(day=1),
+        key="analytics_from",
+    )
+    end = controls[1].date_input(
+        "To",
+        value=date.today(),
+        key="analytics_to",
+    )
+    department_id = controls[2].number_input(
+        "Department ID (0 for all)",
+        min_value=0,
+        step=1,
+        value=0,
+        key="analytics_department_id",
+    )
+    if start > end:
+        st.warning("The report start date must be on or before its end date.")
+        return
+
+    params = {"from": start.isoformat(), "to": end.isoformat()}
+    if department_id:
+        params["department_id"] = int(department_id)
+    analytics = api_request("GET", "/reports/analytics", params=params)
+    if analytics is None:
+        return
+
+    employee_stats = analytics.get("employees")
+    attendance = analytics.get("attendance")
+    leave_report = analytics.get("leaves")
+    payroll = analytics.get("payroll")
+    attrition = analytics.get("attrition")
+    departments = analytics.get("departments")
+
+    if employee_stats:
+        st.subheader("Employee statistics")
+        metric_columns = st.columns(4)
+        metric_columns[0].metric("Employees in scope", employee_stats["total_in_scope"])
+        metric_columns[1].metric("Active", employee_stats["active"])
+        metric_columns[2].metric("Inactive", employee_stats["inactive"])
+        metric_columns[3].metric("Hires in period", employee_stats["hires_in_period"])
+        if employee_stats["active_employee_details"]:
+            st.dataframe(
+                pd.DataFrame(employee_stats["active_employee_details"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if attendance:
+        st.subheader("Attendance analytics")
+        attendance_totals = attendance["totals"]
+        attendance_columns = st.columns(4)
+        attendance_columns[0].metric("Present days", attendance_totals["present_days"])
+        attendance_columns[1].metric("Absent days", attendance_totals["absent_days"])
+        attendance_columns[2].metric("Late days", attendance_totals["late_days"])
+        attendance_columns[3].metric("Overtime hours", attendance_totals["overtime_hours"])
+        if attendance["employees"]:
+            st.dataframe(
+                pd.DataFrame(attendance["employees"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if leave_report:
+        st.subheader("Leave analytics")
+        leave_totals = leave_report["totals"]
+        leave_columns = st.columns(4)
+        leave_columns[0].metric("Requests", leave_totals["requests"])
+        leave_columns[1].metric("Approved", leave_totals["approved"])
+        leave_columns[2].metric("Pending", leave_totals["pending"])
+        leave_columns[3].metric("Requested days", leave_totals["requested_days"])
+        if leave_report["by_type"]:
+            st.bar_chart(
+                pd.DataFrame(leave_report["by_type"]).set_index("category")
+            )
+
+    if payroll:
+        st.subheader("Payroll report")
+        payroll_columns = st.columns(4)
+        payroll_columns[0].metric("Entries", payroll["payroll_entries"])
+        payroll_columns[1].metric("Gross pay", f"{payroll['gross_pay']:,.2f}")
+        payroll_columns[2].metric(
+            "Deductions and tax",
+            f"{payroll['deductions_and_tax']:,.2f}",
+        )
+        payroll_columns[3].metric("Net pay", f"{payroll['net_pay']:,.2f}")
+        if payroll["monthly_totals"]:
+            st.dataframe(
+                pd.DataFrame(payroll["monthly_totals"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if departments:
+        st.subheader("Department-wise report")
+        st.dataframe(
+            pd.DataFrame(departments),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.bar_chart(
+            pd.DataFrame(departments).set_index("department")[
+                ["active_employees", "exits_in_period"]
+            ]
+        )
+
+    if attrition:
+        st.subheader("Employee attrition")
+        attrition_columns = st.columns(3)
+        attrition_columns[0].metric(
+            "Opening headcount",
+            attrition["opening_headcount"],
+        )
+        attrition_columns[1].metric("Exits", attrition["exits_in_period"])
+        attrition_columns[2].metric(
+            "Attrition rate",
+            f"{attrition['attrition_rate_percent']:.2f}%",
+        )
+        if attrition["exits"]:
+            st.dataframe(
+                pd.DataFrame(attrition["exits"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    report_options = []
+    if employee_stats:
+        report_options.append("employees")
+    if attendance:
+        report_options.append("attendance")
+    if leave_report:
+        report_options.append("leaves")
+    if payroll and (has_all_permissions or "salary:read" in permissions):
+        report_options.append("payroll")
+    if departments:
+        report_options.append("departments")
+    if attrition:
+        report_options.append("attrition")
+
+    if report_options:
+        st.subheader("Export report")
+        export_columns = st.columns([2, 1, 1])
+        report_type = export_columns[0].selectbox(
+            "Report",
+            report_options,
+            format_func=lambda value: value.replace("_", " ").title(),
+        )
+        for column, file_format, mime_type in (
+            (export_columns[1], "csv", "text/csv"),
+            (export_columns[2], "pdf", "application/pdf"),
+        ):
+            response = api_request(
+                "GET",
+                f"/reports/{report_type}/export",
+                params={**params, "format": file_format},
+                return_response=True,
+            )
+            if response is not None:
+                column.download_button(
+                    f"Download {file_format.upper()}",
+                    data=response.content,
+                    file_name=(
+                        f"{report_type}-report-{start.isoformat()}-"
+                        f"{end.isoformat()}.{file_format}"
+                    ),
+                    mime=mime_type,
+                    key=f"analytics_export_{report_type}_{file_format}",
+                )
 
 
 # ---------------- EMPLOYEES ----------------
@@ -2423,6 +2645,10 @@ def main():
         if "*" in current_permissions or "audit:read" in current_permissions:
             page_options.insert(3, "Audit logs")
         if current_permissions.intersection(
+            {"*", "report:read", "report:team:read"}
+        ):
+            page_options.insert(2, "Reporting & Analytics")
+        if current_permissions.intersection(
             {
                 "*",
                 "performance:read",
@@ -2458,6 +2684,8 @@ def main():
         permission_management_page()
     elif page == "Audit logs":
         audit_logs_page()
+    elif page == "Reporting & Analytics":
+        reporting_analytics_page()
     elif page == "Attendance":
         attendance_page()
     elif page == "Leave Management":
