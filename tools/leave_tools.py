@@ -1,8 +1,11 @@
 from datetime import date
 from langchain.tools import tool
+from fastapi import HTTPException
+from pydantic import ValidationError
 
-from models.leave import Leave
+from crud.leave import create_leave
 from models.employee import Employee
+from schemas.leave import LeaveCreate
 
 
 def create_leave_tools(db, employee_id: int):
@@ -24,9 +27,12 @@ def create_leave_tools(db, employee_id: int):
         try:
             start = date.fromisoformat(start_date)
             end = date.fromisoformat(end_date)
-
-            if end < start:
-                return "Error: End date cannot be before start date."
+            request = LeaveCreate(
+                leave_type=leave_type,
+                start_date=start,
+                end_date=end,
+                reason=reason,
+            )
 
             employee = (
                 db.query(Employee)
@@ -37,18 +43,12 @@ def create_leave_tools(db, employee_id: int):
             if not employee:
                 return "Error: Employee not found."
 
-            leave = Leave(
-                employee_id=employee_id,
-                leave_type=leave_type,
-                start_date=start,
-                end_date=end,
-                reason=reason,
-                status="Pending",
+            leave = create_leave(
+                db,
+                request,
+                employee=employee,
+                actor_id=employee_id,
             )
-
-            db.add(leave)
-            db.commit()
-            db.refresh(leave)
 
             return (
                 f"Leave request created successfully. "
@@ -56,8 +56,12 @@ def create_leave_tools(db, employee_id: int):
                 f"Status: Pending."
             )
 
+        except (ValueError, ValidationError) as exc:
+            return f"Error: {exc}"
+        except HTTPException as exc:
+            return f"Error: {exc.detail}"
         except Exception:
             db.rollback()
-            return "Error: Unable to create the leave request."
+            raise
 
     return [create_leave_request]

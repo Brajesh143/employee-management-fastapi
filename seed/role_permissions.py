@@ -87,6 +87,7 @@ ROLE_PERMISSIONS = {
         "attendance:wfh",
 
         "leave:read",
+        "leave:create",
         "leave:approve",
         "leave:cancel",
         "leave:balance:manage",
@@ -119,6 +120,7 @@ ROLE_PERMISSIONS = {
         "attendance:correct",
         "attendance:wfh",
         "leave:read",
+        "leave:create",
         "leave:approve",
         "leave:cancel",
         "leave:balance:manage",
@@ -142,7 +144,9 @@ ROLE_PERMISSIONS = {
         "attendance:wfh",
 
         "leave:read",
+        "leave:create",
         "leave:approve",
+        "leave:cancel",
 
         "report:read",
         "report:team:read",

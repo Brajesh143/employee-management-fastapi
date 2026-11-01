@@ -1000,87 +1000,323 @@ def attendance_page():
 
 def leave_page():
     st.title("🌴 Leave Management")
-
-    tab1, tab2 = st.tabs(
-        ["Leave Balance", "Leave Requests"]
+    user = st.session_state.user or {}
+    employee_id = user.get("id")
+    permissions = set(st.session_state.permissions or [])
+    has_all_permissions = "*" in permissions
+    can_read = has_all_permissions or "leave:read" in permissions
+    can_create = has_all_permissions or "leave:create" in permissions
+    can_cancel = has_all_permissions or "leave:cancel" in permissions
+    can_approve = has_all_permissions or "leave:approve" in permissions
+    can_manage_balance = (
+        has_all_permissions or "leave:balance:manage" in permissions
+    )
+    can_report = (
+        has_all_permissions
+        or "report:read" in permissions
+        or "report:team:read" in permissions
     )
 
-    with tab1:
-        employee_id = st.number_input(
-            "Employee ID",
-            min_value=1,
-            step=1,
-            key="leave_employee_id",
-        )
+    tab_names = ["My leave"]
+    if can_approve:
+        tab_names.append("Approvals")
+    if can_report and can_read:
+        tab_names.append("Leave reports")
+    tabs = dict(zip(tab_names, st.tabs(tab_names), strict=True))
 
-        if st.button("Fetch Leave Balance"):
-            leaves = api_request(
-                "GET",
-                f"/leaves/employee/{int(employee_id)}",
-            )
+    with tabs["My leave"]:
+        if not isinstance(employee_id, int):
+            st.error("Your employee profile could not be loaded. Sign in again.")
+            return
 
-            if leaves is not None:
-                if leaves:
+        if can_read:
+            balance = api_request("GET", "/leaves/balance/me")
+            if balance is not None:
+                st.metric("Available leave balance", balance["leave_balance"])
+
+            leave_records = api_request("GET", "/leaves/")
+            if leave_records is not None:
+                own_records = [
+                    record
+                    for record in leave_records
+                    if record["employee_id"] == employee_id
+                ]
+                st.subheader("Leave history")
+                if own_records:
                     st.dataframe(
-                        pd.DataFrame(leaves),
+                        pd.DataFrame(own_records),
                         use_container_width=True,
                         hide_index=True,
                     )
                 else:
-                    st.info("No leave records found.")
+                    st.info("You have no leave requests yet.")
 
-    with tab2:
-        st.subheader("Submit Leave Request")
+                cancellable = [
+                    record
+                    for record in own_records
+                    if record["status"] in {"Pending", "Approved"}
+                    and (
+                        record["status"] == "Pending"
+                        or date.fromisoformat(record["start_date"]) > date.today()
+                    )
+                ]
+                if can_cancel and cancellable:
+                    st.subheader("Cancel a leave request")
+                    with st.form("leave_cancel_form"):
+                        selected_leave_id = st.selectbox(
+                            "Request",
+                            [record["id"] for record in cancellable],
+                            format_func=lambda value: next(
+                                (
+                                    f"#{item['id']} · {item['leave_type']} · "
+                                    f"{item['start_date']} to {item['end_date']}"
+                                    for item in cancellable
+                                    if item["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        cancellation_reason = st.text_input(
+                            "Cancellation reason (optional)"
+                        )
+                        cancel_submitted = st.form_submit_button(
+                            "Cancel leave",
+                            type="secondary",
+                        )
+                    if cancel_submitted:
+                        result = api_request(
+                            "POST",
+                            f"/leaves/{selected_leave_id}/cancel",
+                            json={
+                                "reason": cancellation_reason.strip() or None
+                            },
+                        )
+                        if result is not None:
+                            st.success("Leave request cancelled.")
+                            st.rerun()
 
-        with st.form("leave_request_form"):
-            employee_id = st.number_input(
-                "Employee ID",
-                min_value=1,
-                step=1,
-                key="request_employee_id",
-            )
-
-            leave_type = st.selectbox(
-                "Leave Type",
-                [
-                    "Casual",
-                    "Sick",
-                    "Earned",
-                    "Maternity",
-                    "Paternity",
-                ],
-                index=None,
-                placeholder="Select leave type",
-            )
-            start_date = st.date_input("Start Date")
-            end_date = st.date_input("End Date")
-            reason = st.text_area("Reason")
-
-            submitted = st.form_submit_button(
-                "Submit Leave Request",
-                type="primary",
-            )
-
-        if submitted:
-            if end_date < start_date:
-                st.error("End date cannot be before start date.")
-            else:
-                payload = {
-                    "employee_id": int(employee_id),
-                    "leave_type": leave_type,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "reason": reason,
-                }
-
-                result = api_request(
-                    "POST",
-                    "/leaves/",
-                    json=payload,
+        if can_create:
+            st.subheader("Apply for leave")
+            with st.form("leave_request_form"):
+                leave_type = st.selectbox(
+                    "Leave type",
+                    ["Casual", "Sick", "Earned", "Maternity", "Paternity"],
                 )
+                start_date = st.date_input(
+                    "Start date",
+                    value=date.today(),
+                    key="leave_start_date",
+                )
+                end_date = st.date_input(
+                    "End date",
+                    value=date.today(),
+                    key="leave_end_date",
+                )
+                reason = st.text_area("Reason")
+                submitted = st.form_submit_button(
+                    "Submit leave request",
+                    type="primary",
+                )
+            if submitted:
+                if end_date < start_date:
+                    st.error("End date cannot be before start date.")
+                elif len(reason.strip()) < 3:
+                    st.error("Please provide a reason of at least 3 characters.")
+                else:
+                    result = api_request(
+                        "POST",
+                        "/leaves/",
+                        json={
+                            "leave_type": leave_type,
+                            "start_date": start_date.isoformat(),
+                            "end_date": end_date.isoformat(),
+                            "reason": reason.strip(),
+                        },
+                    )
+                    if result is not None:
+                        st.success(
+                            f"Leave request #{result['id']} submitted for "
+                            f"{result['total_days']} day(s)."
+                        )
+                        st.rerun()
 
+        if can_manage_balance:
+            st.subheader("Manage employee leave balance")
+            with st.form("leave_balance_management_form"):
+                balance_employee_id = st.number_input(
+                    "Employee ID",
+                    min_value=1,
+                    step=1,
+                    key="balance_management_employee_id",
+                )
+                new_balance = st.number_input(
+                    "New available balance (days)",
+                    min_value=0.0,
+                    max_value=365.0,
+                    step=1.0,
+                    key="balance_management_value",
+                )
+                balance_submitted = st.form_submit_button(
+                    "Update balance",
+                    type="secondary",
+                )
+            if balance_submitted:
+                result = api_request(
+                    "PATCH",
+                    f"/leaves/balance/{int(balance_employee_id)}",
+                    json={"leave_balance": new_balance},
+                )
                 if result is not None:
-                    st.success("Leave request submitted.")
+                    st.success(
+                        f"Employee #{result['employee_id']} now has "
+                        f"{result['leave_balance']} leave day(s)."
+                    )
+
+    if can_approve:
+        with tabs["Approvals"]:
+            if not can_read:
+                st.error("Your role cannot view leave requests.")
+            else:
+                requests = api_request("GET", "/leaves/")
+                if requests is None:
+                    requests = []
+                pending = [
+                    item
+                    for item in requests
+                    if item["status"] == "Pending"
+                    and (
+                        (
+                            item["approval_stage"] == "manager"
+                            and item.get("approval_manager_id") == employee_id
+                            and item["employee_id"] != employee_id
+                        )
+                        or (
+                            item["approval_stage"] == "hr"
+                            and can_manage_balance
+                            and item["employee_id"] != employee_id
+                        )
+                    )
+                ]
+                if pending:
+                    st.subheader("Requests awaiting your review")
+                    with st.form("leave_review_form"):
+                        selected_request_id = st.selectbox(
+                            "Leave request",
+                            [item["id"] for item in pending],
+                            format_func=lambda value: next(
+                                (
+                                    f"#{item['id']} · Employee "
+                                    f"#{item['employee_id']} · "
+                                    f"{item['leave_type']} · "
+                                    f"{item['start_date']} to {item['end_date']} "
+                                    f"({item['approval_stage']} review)"
+                                    for item in pending
+                                    if item["id"] == value
+                                ),
+                                str(value),
+                            ),
+                        )
+                        selected_request = next(
+                            item
+                            for item in pending
+                            if item["id"] == selected_request_id
+                        )
+                        st.write(selected_request["reason"])
+                        approve_column, reject_column = st.columns(2)
+                        approved = approve_column.form_submit_button(
+                            "Approve",
+                            type="primary",
+                        )
+                        rejected = reject_column.form_submit_button("Reject")
+                    decision = (
+                        "approved" if approved else "rejected" if rejected else None
+                    )
+                    if decision:
+                        result = api_request(
+                            "PUT",
+                            f"/leaves/{selected_request_id}/{decision}",
+                        )
+                        if result is not None:
+                            st.success(result["message"])
+                            st.rerun()
+                else:
+                    st.info("There are no leave requests awaiting your review.")
+
+                if can_manage_balance:
+                    manager_stage = [
+                        item
+                        for item in requests
+                        if item["status"] == "Pending"
+                        and item["approval_stage"] == "manager"
+                    ]
+                    if manager_stage:
+                        st.caption(
+                            "These requests are pending their assigned manager "
+                            "before HR can make the final decision."
+                        )
+                        st.dataframe(
+                            pd.DataFrame(manager_stage),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+    if can_report and can_read:
+        with tabs["Leave reports"]:
+            st.subheader("Leave history and report")
+            from_column, to_column, filter_column = st.columns(3)
+            report_start = from_column.date_input(
+                "From",
+                value=date.today().replace(day=1),
+                key="leave_report_from",
+            )
+            report_end = to_column.date_input(
+                "To",
+                value=date.today(),
+                key="leave_report_to",
+            )
+            report_status = filter_column.selectbox(
+                "Status",
+                ["All", "Pending", "Approved", "Rejected", "Cancelled"],
+            )
+            report_type = st.selectbox(
+                "Leave type",
+                ["All", "Sick", "Casual", "Earned", "Maternity", "Paternity"],
+            )
+            if st.button("Generate leave report"):
+                if report_end < report_start:
+                    st.error("'To' date cannot be before 'From' date.")
+                else:
+                    params = {
+                        "from": report_start.isoformat(),
+                        "to": report_end.isoformat(),
+                    }
+                    if report_status != "All":
+                        params["leave_status"] = report_status
+                    if report_type != "All":
+                        params["leave_type"] = report_type
+                    report = api_request(
+                        "GET",
+                        "/leaves/reports",
+                        params=params,
+                    )
+                    if report is not None:
+                        totals = report["totals"]
+                        metric_columns = st.columns(5)
+                        metric_columns[0].metric("Requests", totals["requests"])
+                        metric_columns[1].metric(
+                            "Requested days", totals["requested_days"]
+                        )
+                        metric_columns[2].metric("Pending", totals["pending"])
+                        metric_columns[3].metric("Approved", totals["approved"])
+                        metric_columns[4].metric("Rejected", totals["rejected"])
+                        if report["leaves"]:
+                            st.dataframe(
+                                pd.DataFrame(report["leaves"]),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.info("No leave requests match this report.")
 
 
 # -----------------Salary Page -----------------
@@ -1117,57 +1353,7 @@ def salary_page():
                     st.info("No Salary records found.")
 
     with tab2:
-        st.subheader("Submit Leave Request")
-
-        with st.form("leave_request_form"):
-            employee_id = st.number_input(
-                "Employee ID",
-                min_value=1,
-                step=1,
-                key="request_employee_id",
-            )
-
-            leave_type = st.selectbox(
-                "Leave Type",
-                [
-                    "Casual",
-                    "Sick",
-                    "Earned",
-                    "Maternity",
-                    "Paternity",
-                ],
-                index=None,
-                placeholder="Select leave type",
-            )
-            start_date = st.date_input("Start Date")
-            end_date = st.date_input("End Date")
-            reason = st.text_area("Reason")
-
-            submitted = st.form_submit_button(
-                "Submit Leave Request",
-                type="primary",
-            )
-
-        if submitted:
-            if end_date < start_date:
-                st.error("End date cannot be before start date.")
-            else:
-                payload = {
-                    "employee_id": int(employee_id),
-                    "leave_type": leave_type,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "reason": reason,
-                }
-
-                result = api_request(
-                    "POST",
-                    "/leaves/",
-                    json=payload,
-                )
-
-                if result is not None:
-                    st.success("Leave request submitted.")
+        st.info("Salary creation is not available yet.")
 
 # ---------------- AI ASSISTANT ----------------
 
@@ -1246,11 +1432,20 @@ def main():
         page_options = [
             "Dashboard",
             "Employees",
-            "Leave Management",
             "Salary Management",
             "AI Assistant",
             "Change password",
         ]
+        if current_permissions.intersection(
+            {
+                "*",
+                "leave:create",
+                "leave:read",
+                "leave:approve",
+                "leave:balance:manage",
+            }
+        ):
+            page_options.insert(2, "Leave Management")
         if current_permissions.intersection(
             {
                 "*",

@@ -134,7 +134,7 @@ definitions are automatically assigned to Super Admin roles.
 Audit history is available in the Streamlit **Audit logs** page and through
 `GET /audit-logs/`. Access requires `audit:read`. The endpoint supports
 pagination and filtering by actor, action, resource, and date range. Employee,
-role, permission, and attendance changes record before/after snapshots; employee
+role, permission, attendance, and leave changes record before/after snapshots; employee
 snapshots exclude password hashes and other authentication secrets.
 
 Attendance self-service is available from the Streamlit **Attendance** page.
@@ -145,6 +145,29 @@ optional department filtering; report access requires `report:read`.
 Check-in/check-out endpoints are `POST /attendance/check-in` and
 `POST /attendance/check-out`; correction requests use
 `POST /attendance/corrections`.
+
+Leave self-service is available from the Streamlit **Leave Management** page.
+Employees can apply for leave, view their balance and request history, and
+cancel pending requests or approved requests before their start date. Leave
+days are counted inclusively as calendar days. Requests for employees with an
+assigned manager first require that manager's approval, then final HR approval;
+employees without an assigned manager go directly to HR. HR/Admin balance
+changes and all leave decisions are recorded in the audit log.
+
+The leave API is under `/leaves`: `GET /leaves/balance/me` reads the signed-in
+user's balance, `PATCH /leaves/balance/{employee_id}` adjusts a balance,
+`POST /leaves/{leave_id}/cancel` cancels a request, and
+`GET /leaves/reports?from=YYYY-MM-DD&to=YYYY-MM-DD` returns scoped leave history
+and totals. Balance changes require `leave:balance:manage`,
+leave actions use the relevant `leave:*` permissions, and reports require
+`report:read` or `report:team:read` together with `leave:read`.
+Apply the migration and refresh the role permissions before using the updated
+workflow:
+
+```bash
+./myenv/bin/alembic upgrade head
+./myenv/bin/python seed/run_seed.py
+```
 
 Agentic AI — LangGraph, LangChain, Multi-Agent Systems, Agent Memory
 MCP — Tools, Resources, MCP servers/clients
