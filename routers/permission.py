@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
-from auth.permissions import require_permission
+from auth.permissions import require_any_permission, require_permission
 from crud import permission as crud
 from database import get_db
 from models.employee import Employee
@@ -20,7 +20,9 @@ router = APIRouter()
 @router.get(
     "/",
     response_model=list[PermissionResponse],
-    dependencies=[Depends(require_permission("permission:manage"))],
+    dependencies=[
+        Depends(require_any_permission("permission:manage", "role:assign"))
+    ],
 )
 def list_permissions(db: Session = Depends(get_db)):
     return crud.list_permissions(db)

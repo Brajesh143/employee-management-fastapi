@@ -29,6 +29,9 @@ if "token" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 
+if "permissions" not in st.session_state:
+    st.session_state.permissions = None
+
 
 # ---------------- API HELPERS ----------------
 
@@ -56,6 +59,7 @@ def api_request(method, endpoint, **kwargs):
         if response.status_code == 401 and handle_unauthorized:
             st.session_state.token = None
             st.session_state.user = None
+            st.session_state.permissions = []
             st.error("Session expired. Please log in again.")
             st.rerun()
 
@@ -135,6 +139,9 @@ def login_page():
             if result and result.get("access_token"):
                 st.session_state.token = result["access_token"]
                 st.session_state.user = api_request("GET", "/auth/me") or {}
+                st.session_state.permissions = (
+                    api_request("GET", "/auth/me/permissions") or []
+                )
 
                 st.rerun()
 
@@ -179,6 +186,7 @@ def change_password_page():
     if result:
         st.session_state.token = None
         st.session_state.user = None
+        st.session_state.permissions = []
         st.session_state.auth_message = (
             "Password updated. Please sign in with your new password."
         )
@@ -220,180 +228,202 @@ def permission_management_page():
         "The API enforces the required permissions for each action."
     )
 
+    permissions_for_user = set(st.session_state.permissions)
+    can_manage_permissions = (
+        "*" in permissions_for_user
+        or "permission:manage" in permissions_for_user
+    )
+    can_assign_permissions = (
+        "*" in permissions_for_user
+        or "role:assign" in permissions_for_user
+    )
+    if not can_manage_permissions and not can_assign_permissions:
+        st.error("Your role does not have permission to manage role permissions.")
+        return
+
     permissions = api_request("GET", "/permissions/")
     if permissions is None:
         return
 
-    catalog_tab, assignments_tab = st.tabs(
-        ["Permission catalog", "Role assignments"]
-    )
+    tab_names = []
+    if can_manage_permissions:
+        tab_names.append("Permission catalog")
+    if can_assign_permissions:
+        tab_names.append("Role assignments")
+    tabs = iter(st.tabs(tab_names))
 
-    with catalog_tab:
-        st.subheader("Permission catalog")
-        if permissions:
-            st.dataframe(
-                pd.DataFrame(permissions),
-                use_container_width=True,
-                hide_index=True,
-            )
-        else:
-            st.info("No permissions are defined yet.")
-
-        with st.expander("Create permission"):
-            with st.form("create_permission_form"):
-                new_name = st.text_input(
-                    "Permission name",
-                    placeholder="employee:read:all",
+    if can_manage_permissions:
+        with next(tabs):
+            st.subheader("Permission catalog")
+            if permissions:
+                st.dataframe(
+                    pd.DataFrame(permissions),
+                    use_container_width=True,
+                    hide_index=True,
                 )
-                new_description = st.text_area("Description")
-                create_submitted = st.form_submit_button(
-                    "Create permission",
-                    type="primary",
-                )
+            else:
+                st.info("No permissions are defined yet.")
 
-            if create_submitted:
-                if not new_name.strip():
-                    st.warning("Enter a permission name.")
-                else:
-                    created = api_request(
-                        "POST",
-                        "/permissions/",
-                        json={
-                            "name": new_name,
-                            "description": new_description.strip() or None,
-                        },
-                    )
-                    if created is not None:
-                        st.success(f"Created permission: {created['name']}")
-                        st.rerun()
-
-        if permissions:
-            labels = {
-                f"{item['name']} (ID: {item['id']})": item
-                for item in permissions
-            }
-            selected_label = st.selectbox(
-                "Select a permission to edit or delete",
-                options=list(labels),
-                key="permission_catalog_selection",
-            )
-            selected_permission = labels[selected_label]
-
-            with st.expander("Edit selected permission"):
-                with st.form("edit_permission_form"):
-                    edited_name = st.text_input(
+            with st.expander("Create permission"):
+                with st.form("create_permission_form"):
+                    new_name = st.text_input(
                         "Permission name",
-                        value=selected_permission["name"],
+                        placeholder="employee:read:all",
                     )
-                    edited_description = st.text_area(
-                        "Description",
-                        value=selected_permission.get("description") or "",
-                    )
-                    edit_submitted = st.form_submit_button(
-                        "Save changes",
+                    new_description = st.text_area("Description")
+                    create_submitted = st.form_submit_button(
+                        "Create permission",
                         type="primary",
                     )
 
-                if edit_submitted:
-                    if not edited_name.strip():
+                if create_submitted:
+                    if not new_name.strip():
                         st.warning("Enter a permission name.")
                     else:
-                        updated = api_request(
-                            "PATCH",
-                            f"/permissions/{selected_permission['id']}",
+                        created = api_request(
+                            "POST",
+                            "/permissions/",
                             json={
-                                "name": edited_name,
-                                "description": edited_description.strip() or None,
+                                "name": new_name,
+                                "description": new_description.strip() or None,
                             },
                         )
-                        if updated is not None:
-                            st.success(f"Updated permission: {updated['name']}")
+                        if created is not None:
+                            st.success(f"Created permission: {created['name']}")
                             st.rerun()
 
-            confirm_delete = st.checkbox(
-                f"Confirm deletion of {selected_permission['name']}",
-                key=f"confirm_delete_permission_{selected_permission['id']}",
-            )
-            if st.button(
-                "Delete selected permission",
-                disabled=not confirm_delete,
-                key="delete_permission_button",
-            ):
-                response = api_request(
-                    "DELETE",
-                    f"/permissions/{selected_permission['id']}",
-                    return_response=True,
+            if permissions:
+                labels = {
+                    f"{item['name']} (ID: {item['id']})": item
+                    for item in permissions
+                }
+                selected_label = st.selectbox(
+                    "Select a permission to edit or delete",
+                    options=list(labels),
+                    key="permission_catalog_selection",
                 )
-                if response is not None:
-                    st.success("Permission deleted.")
-                    st.rerun()
+                selected_permission = labels[selected_label]
 
-    with assignments_tab:
-        st.subheader("Assign permissions to a role")
-        roles = api_request("GET", "/roles/")
-        if roles is None:
-            return
-        assignable_roles = [
-            role for role in roles if role["name"] != "Super Admin"
-        ]
-        if not assignable_roles:
-            st.info("No editable roles are available.")
-            return
+                with st.expander("Edit selected permission"):
+                    with st.form("edit_permission_form"):
+                        edited_name = st.text_input(
+                            "Permission name",
+                            value=selected_permission["name"],
+                        )
+                        edited_description = st.text_area(
+                            "Description",
+                            value=selected_permission.get("description") or "",
+                        )
+                        edit_submitted = st.form_submit_button(
+                            "Save changes",
+                            type="primary",
+                        )
 
-        role_labels = {
-            f"{role['name']} (ID: {role['id']})": role
-            for role in assignable_roles
-        }
-        selected_role_label = st.selectbox(
-            "Role",
-            options=list(role_labels),
-            key="permission_assignment_role",
-        )
-        selected_role = role_labels[selected_role_label]
-        assigned_permissions = api_request(
-            "GET",
-            f"/permissions/roles/{selected_role['id']}/permissions",
-        )
-        if assigned_permissions is None:
-            return
+                    if edit_submitted:
+                        if not edited_name.strip():
+                            st.warning("Enter a permission name.")
+                        else:
+                            updated = api_request(
+                                "PATCH",
+                                f"/permissions/{selected_permission['id']}",
+                                json={
+                                    "name": edited_name,
+                                    "description": (
+                                        edited_description.strip() or None
+                                    ),
+                                },
+                            )
+                            if updated is not None:
+                                st.success(f"Updated permission: {updated['name']}")
+                                st.rerun()
 
-        permission_labels = {
-            f"{permission['name']} (ID: {permission['id']})": permission
-            for permission in permissions
-        }
-        current_ids = {permission["id"] for permission in assigned_permissions}
-        current_labels = [
-            label
-            for label, permission in permission_labels.items()
-            if permission["id"] in current_ids
-        ]
+                confirm_delete = st.checkbox(
+                    f"Confirm deletion of {selected_permission['name']}",
+                    key=f"confirm_delete_permission_{selected_permission['id']}",
+                )
+                if st.button(
+                    "Delete selected permission",
+                    disabled=not confirm_delete,
+                    key="delete_permission_button",
+                ):
+                    response = api_request(
+                        "DELETE",
+                        f"/permissions/{selected_permission['id']}",
+                        return_response=True,
+                    )
+                    if response is not None:
+                        st.success("Permission deleted.")
+                        st.rerun()
 
-        with st.form("role_permissions_form"):
-            chosen_labels = st.multiselect(
-                "Permissions",
-                options=list(permission_labels),
-                default=current_labels,
-                help="This replaces the role's complete permission set.",
-            )
-            assignment_submitted = st.form_submit_button(
-                "Save role permissions",
-                type="primary",
-            )
-
-        if assignment_submitted:
-            permission_ids = [
-                permission_labels[label]["id"] for label in chosen_labels
+    if can_assign_permissions:
+        with next(tabs):
+            st.subheader("Assign permissions to a role")
+            roles = api_request("GET", "/roles/")
+            if roles is None:
+                return
+            assignable_roles = [
+                role for role in roles if role["name"] != "Super Admin"
             ]
-            updated_permissions = api_request(
-                "PUT",
-                f"/permissions/roles/{selected_role['id']}/permissions",
-                json={"permission_ids": permission_ids},
+            if not assignable_roles:
+                st.info("No editable roles are available.")
+                return
+
+            role_labels = {
+                f"{role['name']} (ID: {role['id']})": role
+                for role in assignable_roles
+            }
+            selected_role_label = st.selectbox(
+                "Role",
+                options=list(role_labels),
+                key="permission_assignment_role",
             )
-            if updated_permissions is not None:
-                st.success(
-                    f"Updated permissions for the {selected_role['name']} role."
+            selected_role = role_labels[selected_role_label]
+            assigned_permissions = api_request(
+                "GET",
+                f"/permissions/roles/{selected_role['id']}/permissions",
+            )
+            if assigned_permissions is None:
+                return
+
+            permission_labels = {
+                f"{permission['name']} (ID: {permission['id']})": permission
+                for permission in permissions
+            }
+            current_ids = {
+                permission["id"] for permission in assigned_permissions
+            }
+            current_labels = [
+                label
+                for label, permission in permission_labels.items()
+                if permission["id"] in current_ids
+            ]
+
+            with st.form("role_permissions_form"):
+                chosen_labels = st.multiselect(
+                    "Permissions",
+                    options=list(permission_labels),
+                    default=current_labels,
+                    help="This replaces the role's complete permission set.",
                 )
-                st.rerun()
+                assignment_submitted = st.form_submit_button(
+                    "Save role permissions",
+                    type="primary",
+                )
+
+            if assignment_submitted:
+                permission_ids = [
+                    permission_labels[label]["id"] for label in chosen_labels
+                ]
+                updated_permissions = api_request(
+                    "PUT",
+                    f"/permissions/roles/{selected_role['id']}/permissions",
+                    json={"permission_ids": permission_ids},
+                )
+                if updated_permissions is not None:
+                    st.success(
+                        f"Updated permissions for the {selected_role['name']} role."
+                    )
+                    st.rerun()
 
 
 # ---------------- ATTENDANCE ----------------
@@ -656,6 +686,12 @@ def main():
         login_page()
         return
 
+    if st.session_state.permissions is None:
+        permissions = api_request("GET", "/auth/me/permissions")
+        if permissions is None:
+            return
+        st.session_state.permissions = permissions
+
     with st.sidebar:
         st.title("🏢 EMS")
 
@@ -664,19 +700,24 @@ def main():
             f"Welcome, {user.get('first_name', 'User')}"
         )
 
-        page = st.radio(
-            "Navigation",
-            [
-                "Dashboard",
-                "Employees",
-                "Permission management",
-                "Attendance",
-                "Leave Management",
-                "Salary Management",
-                "AI Assistant",
-                "Change password",
-            ],
-        )
+        current_permissions = set(st.session_state.permissions)
+        page_options = [
+            "Dashboard",
+            "Employees",
+            "Attendance",
+            "Leave Management",
+            "Salary Management",
+            "AI Assistant",
+            "Change password",
+        ]
+        if (
+            "*" in current_permissions
+            or "permission:manage" in current_permissions
+            or "role:assign" in current_permissions
+        ):
+            page_options.insert(2, "Permission management")
+
+        page = st.radio("Navigation", page_options)
 
         st.divider()
 
@@ -688,6 +729,7 @@ def main():
             )
             st.session_state.token = None
             st.session_state.user = None
+            st.session_state.permissions = []
             st.session_state.chat_history = []
             st.rerun()
 

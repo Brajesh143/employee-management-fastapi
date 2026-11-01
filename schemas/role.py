@@ -5,16 +5,16 @@ from datetime import datetime
 class RoleBase(BaseModel):
     name: Annotated[
         str,
-        Field(min_length=3, 
-              max_length=50, 
-              description="Role name", 
+        Field(min_length=2,
+              max_length=50,
+              description="Role name",
               examples=["Admin"])
     ]
 
     description: Annotated[
         str | None,
         Field(default=None,
-              max_length=200, 
+              max_length=200,
               description="Role description")
     ]
 
@@ -25,7 +25,7 @@ class RoleUpdate(BaseModel):
     name: Annotated[
         str | None,
         Field(default=None,
-              min_length=3,
+              min_length=2,
               max_length=50)
     ]
 
