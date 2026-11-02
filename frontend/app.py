@@ -208,57 +208,11 @@ def dashboard_page():
         st.info("Reporting access is not enabled for your role.")
         return
 
-    today = date.today()
-    report = api_request(
-        "GET",
-        "/reports/analytics",
-        params={
-            "from": today.replace(day=1).isoformat(),
-            "to": today.isoformat(),
-        },
-    )
-    if report is None:
-        return
-
-    employee_stats = report.get("employees", {})
-    attendance_stats = report.get("attendance", {}).get("totals", {})
-    leave_stats = report.get("leaves", {}).get("totals", {})
-    department_stats = report.get("departments", [])
-    columns = st.columns(4)
-    columns[0].metric(
-        "Active employees",
-        employee_stats.get("active", "—"),
-    )
-    columns[1].metric(
-        "Present days",
-        attendance_stats.get("present_days", "—"),
-    )
-    columns[2].metric(
-        "Pending leave requests",
-        leave_stats.get("pending", "—"),
-    )
-    columns[3].metric(
-        "Departments in scope",
-        len(department_stats) if "departments" in report else "—",
-    )
-    if "payroll" in report:
-        payroll = report["payroll"]
-        st.metric(
-            "Period net payroll",
-            f"{payroll['net_pay']:,.2f}",
-            help="Payroll entries for the selected month-to-date period.",
-        )
-    if department_stats:
-        st.subheader("Department overview")
-        st.bar_chart(
-            pd.DataFrame(department_stats).set_index("department")[
-                ["active_employees"]
-            ]
-        )
+    render_dashboard_analytics()
 
 
-def reporting_analytics_page():
-    st.title("📊 Reporting & Analytics")
+def render_dashboard_analytics():
+    st.subheader("Reporting & Analytics")
     st.caption(
         "Scoped employee, attendance, leave, payroll, department, and attrition reports."
     )
@@ -2645,10 +2599,6 @@ def main():
         if "*" in current_permissions or "audit:read" in current_permissions:
             page_options.insert(3, "Audit logs")
         if current_permissions.intersection(
-            {"*", "report:read", "report:team:read"}
-        ):
-            page_options.insert(2, "Reporting & Analytics")
-        if current_permissions.intersection(
             {
                 "*",
                 "performance:read",
@@ -2684,8 +2634,6 @@ def main():
         permission_management_page()
     elif page == "Audit logs":
         audit_logs_page()
-    elif page == "Reporting & Analytics":
-        reporting_analytics_page()
     elif page == "Attendance":
         attendance_page()
     elif page == "Leave Management":

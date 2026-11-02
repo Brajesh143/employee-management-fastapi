@@ -106,6 +106,24 @@ New passwords are stored with bcrypt. Existing salted SHA-256 password hashes
 for passwords up to 72 UTF-8 bytes are upgraded to bcrypt on successful login;
 longer legacy passwords remain verifiable until changed.
 
+To completely reset employee and role seed data, run this destructive command
+from the repository root:
+
+```bash
+./myenv/bin/python seed/reset_and_seed.py --confirm-reset
+```
+
+It deletes employee and salary records and employee-linked attendance, leave,
+expense, performance, recruitment, notification, and document records. It
+preserves departments, designations, shifts, permissions, and audit history
+(audit actor references are cleared). It then reseeds the built-in roles and
+role permissions and creates one active Super Admin employee for
+`brajesh@gmail.com`. Enter and confirm the new password at the hidden prompt;
+the password is not stored in the seed code. Existing access tokens are
+invalidated and users must sign in again. Stored employee documents and expense
+receipts are deleted after the database reset succeeds. Do not run this command
+unless you intend to permanently remove this data.
+
 SMTP-based password reset is disabled until SMTP is configured. Signed-in users
 can change their password from the **Change password** page; the current
 password is required and all existing sessions are invalidated after a
@@ -184,12 +202,13 @@ eligible for payment. Users with `reimbursement:approve` mark approved claims
 as reimbursed. Expense visibility follows employee/manager scope unless the
 user has organization-wide access. These changes are recorded in the audit log.
 
-Reporting and analytics are available through the Streamlit **Reporting &
-Analytics** page and `GET /reports/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD`.
-The dashboard and reports include in-scope employee statistics, attendance and
+Reporting and analytics are shown on the Streamlit **Dashboard** and are also
+available through `GET /reports/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+The dashboard reports include in-scope employee statistics, attendance and
 leave summaries, monthly payroll totals, department comparisons, and employee
-attrition calculated from opening headcount and recorded exit dates. The
-attrition denominator includes employees with a recorded joining date on or
+attrition calculated from opening headcount and recorded exit dates. Use the
+date range and optional department filter on the dashboard to scope the results.
+The attrition denominator includes employees with a recorded joining date on or
 before the report start and no earlier exit; employees without a joining date
 are excluded because their opening-period employment cannot be determined.
 Payroll, attendance, and leave sections are only returned to users with the

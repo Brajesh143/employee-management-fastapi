@@ -276,7 +276,7 @@ DEFAULT_PERMISSIONS = [
 ]
 
 
-def seed_permissions(db: Session):
+def seed_permissions(db: Session, *, commit: bool = True):
 
     for permission in DEFAULT_PERMISSIONS:
 
@@ -289,6 +289,8 @@ def seed_permissions(db: Session):
         if not exists:
             db.add(Permission(**permission))
 
-    db.commit()
+    db.flush()
+    if commit:
+        db.commit()
 
     print("Permissions seeded successfully.")
