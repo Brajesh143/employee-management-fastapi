@@ -118,46 +118,6 @@ ROLE_PERMISSIONS = {
         "notification:manage",
     ],
 
-    # Retain permissions for installations that already have the former role name.
-    "Human Resource": [
-        "employee:create",
-        "employee:read",
-        "employee:read:all",
-        "employee:update",
-        "employee:import",
-        "employee:export",
-        "document:manage",
-        "department:read",
-        "attendance:create",
-        "attendance:manage",
-        "attendance:read",
-        "attendance:update",
-        "attendance:correct",
-        "attendance:wfh",
-        "leave:read",
-        "leave:create",
-        "leave:approve",
-        "leave:cancel",
-        "leave:balance:manage",
-        "salary:create",
-        "salary:read",
-        "salary:update",
-        "payroll:generate",
-        "payslip:read",
-        "expense:create",
-        "expense:read",
-        "expense:update",
-        "expense:approve",
-        "reimbursement:read",
-        "performance:review",
-        "performance:read",
-        "performance:goal:manage",
-        "performance:goal:update",
-        "recruitment:manage",
-        "report:read",
-        "notification:manage",
-    ],
-
     "Manager": [
         "employee:read",
         "employee:team:read",
@@ -221,7 +181,7 @@ ROLE_PERMISSIONS = {
 }
 
 
-def seed_role_permissions(db: Session) -> None:
+def seed_role_permissions(db: Session, *, commit: bool = True) -> None:
 
     try:
         all_permissions = {
@@ -275,7 +235,9 @@ def seed_role_permissions(db: Session) -> None:
                     )
                 )
 
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
 
         print("Role permissions seeded successfully.")
 

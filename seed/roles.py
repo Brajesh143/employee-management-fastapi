@@ -41,14 +41,16 @@ DEFAULT_ROLES = [
 ]
 
 
-def seed_roles(db: Session) -> None:
+def seed_roles(db: Session, *, commit: bool = True) -> None:
     try:
         existing_names = {name for (name,) in db.query(Role.name).all()}
         for role_data in DEFAULT_ROLES:
             if role_data["name"] not in existing_names:
                 db.add(Role(**role_data))
 
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         print("Roles seeded successfully.")
     except Exception:
         db.rollback()
