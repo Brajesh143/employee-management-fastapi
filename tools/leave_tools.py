@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from langchain.tools import tool
 from fastapi import HTTPException
@@ -8,7 +9,12 @@ from models.employee import Employee
 from schemas.leave import LeaveCreate
 
 
-def create_leave_tools(db, employee_id: int):
+def create_leave_tools(db: Session, employee_id: int):
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if employee is None:
+        raise ValueError("Authenticated employee was not found.")
+
+    tools = []
 
     @tool
     def create_leave_request(

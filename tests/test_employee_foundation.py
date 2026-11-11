@@ -25,6 +25,7 @@ from models.permission import Permission
 from models.role import Role
 from models.role_permission import RolePermission
 from schemas.employee import EmployeeUpdate
+from schemas.employee_document import EmployeeDocumentAIAnalysisResponse
 from services.employee_csv import export_employees_csv, preview_employee_csv
 from services.employee_document_storage import LocalDiskDocumentStorage
 from services.employee_documents import create_employee_document, get_employee_documents
@@ -542,6 +543,38 @@ def test_employee_document_and_soft_exit_api(employee_api):
     assert exited.json()["is_active"] is False
     assert exited.json()["exit_date"] == "2026-10-30"
     assert exited.json()["status"] == "Exited"
+
+
+def test_employee_document_ai_analysis_api(employee_api, monkeypatch):
+    client, engine, _ = employee_api
+    with Session(engine) as db:
+        employee = add_employee(db, "EMP001")
+        employee_id = employee.id
+        db.commit()
+
+    uploaded = client.post(
+        f"/employees/{employee_id}/documents",
+        files={"file": ("offer.pdf", b"%PDF-1.7\noffer", "application/pdf")},
+    )
+    assert uploaded.status_code == 201
+    document_id = uploaded.json()["id"]
+    monkeypatch.setattr(
+        "routers.employee.analyze_employee_document",
+        lambda document, _storage: EmployeeDocumentAIAnalysisResponse(
+            document_id=document.id,
+            file_name=document.file_name,
+            analysis="Document type: Offer letter\nSummary: Offer details.",
+            source_text_truncated=False,
+        ),
+    )
+
+    analyzed = client.post(
+        f"/employees/documents/{document_id}/ai-analysis"
+    )
+
+    assert analyzed.status_code == 200
+    assert analyzed.json()["document_id"] == document_id
+    assert analyzed.json()["analysis"].startswith("Document type:")
 
 
 def test_manager_employee_api_is_limited_to_direct_reports(employee_api):

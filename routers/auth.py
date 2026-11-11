@@ -8,6 +8,7 @@ from crud.auth import (
     login_employee,
     revoke_access_token,
 )
+from auth.permissions import get_role_permissions
 from auth.dependencies import get_current_active_user, oauth2_scheme
 from models.employee import Employee
 from schemas.auth import (

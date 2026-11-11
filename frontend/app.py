@@ -1952,12 +1952,56 @@ def ai_assistant_page():
     st.title("🤖 AI Employee Assistant")
 
     st.caption(
-        "Ask questions about your attendance, leave balance, "
-        "or employee information."
+        "Ask about your attendance history and today's status, leave balance, "
+        "leave requests, or employee information. Leave applications are "
+        "submitted only after you confirm the prepared draft."
     )
+
+    permissions = st.session_state.get("permissions")
+    if permissions is None:
+        permissions = api_request("GET", "/auth/me/permissions") or []
+        st.session_state.permissions = permissions
+    permissions = set(permissions)
+    if permissions.intersection({"*", "ai:admin"}):
+        with st.expander("Upload leave policy", expanded=False):
+            st.caption(
+                "Upload an authoritative PDF, Markdown, or UTF-8 text policy. "
+                "The document is indexed locally for leave-policy answers."
+            )
+            with st.form("leave_policy_upload_form"):
+                policy_file = st.file_uploader(
+                    "Policy document",
+                    type=["pdf", "md", "txt"],
+                )
+                upload_policy = st.form_submit_button(
+                    "Index leave policy",
+                    type="primary",
+                )
+            if upload_policy:
+                if policy_file is None:
+                    st.warning("Choose a policy file to upload.")
+                else:
+                    result = api_request(
+                        "POST",
+                        "/api/v1/ai/leave-policies",
+                        files={
+                            "file": (
+                                policy_file.name,
+                                policy_file.getvalue(),
+                                policy_file.type or "application/octet-stream",
+                            )
+                        },
+                    )
+                    if result is not None:
+                        st.success(
+                            f"Indexed {result['file_name']} into "
+                            f"{result['chunks_indexed']} searchable sections."
+                        )
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    if "pending_leave_draft" not in st.session_state:
+        st.session_state.pending_leave_draft = None
 
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
@@ -1987,6 +2031,10 @@ def ai_assistant_page():
                         "response",
                         result.get("answer", "No response received."),
                     )
+                    if result.get("leave_draft"):
+                        st.session_state.pending_leave_draft = result[
+                            "leave_draft"
+                        ]
                 else:
                     answer = "Unable to get a response from the AI assistant."
 
@@ -1996,6 +2044,51 @@ def ai_assistant_page():
             "role": "assistant",
             "content": answer,
         })
+
+    draft = st.session_state.pending_leave_draft
+    if draft:
+        st.subheader("Review leave request")
+        st.write(f"**Type:** {draft['leave_type']}")
+        st.write(
+            f"**Dates:** {draft['start_date']} to {draft['end_date']} "
+            f"({draft['total_days']} calendar days)"
+        )
+        st.write(f"**Reason:** {draft['reason']}")
+        st.caption(
+            "This is a draft. It will be sent for human review only after "
+            "you confirm."
+        )
+        confirm_column, discard_column = st.columns(2)
+        if confirm_column.button(
+            "Confirm and submit",
+            type="primary",
+            key="confirm_ai_leave_request",
+        ):
+            employee = st.session_state.user or {}
+            result = api_request(
+                "POST",
+                "/leaves/",
+                json={
+                    "employee_id": employee.get("id"),
+                    "leave_type": draft["leave_type"],
+                    "start_date": f"{draft['start_date']}T00:00:00",
+                    "end_date": f"{draft['end_date']}T00:00:00",
+                    "reason": draft["reason"],
+                },
+            )
+            if result is not None:
+                st.session_state.pending_leave_draft = None
+                st.success(
+                    f"Leave request submitted. Request ID: {result['id']}."
+                )
+                st.rerun()
+        if discard_column.button(
+            "Discard draft",
+            key="discard_ai_leave_request",
+        ):
+            st.session_state.pending_leave_draft = None
+            st.info("Leave request draft discarded.")
+            st.rerun()
 
 
 def performance_recruitment_page():

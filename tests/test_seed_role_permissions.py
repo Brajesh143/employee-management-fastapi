@@ -52,6 +52,8 @@ def test_seed_roles_and_permissions_creates_catalog_and_preserves_custom_roles()
         }
         assert permissions_for("Super Admin") == all_permission_names
         assert "employee:read:all" in permissions_for("HR")
+        assert "ai:admin" in permissions_for("HR")
+        assert "ai:admin" in permissions_for("Admin")
         assert "employee:team:read" in permissions_for("Manager")
         assert "attendance:manage" not in permissions_for("Employee")
         assert "role:assign" in permissions_for("Admin")

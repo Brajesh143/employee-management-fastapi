@@ -604,9 +604,14 @@ Eval: faithfulness, context precision (Ragas) on a golden set
 
 If retrieval is empty: refuse rather than guess.
 
-#### Employee Self-Service Assistant (exists; extend)
+#### Employee Self-Service Assistant (implemented)
 
-Current: `POST /api/v1/ai/chat` with tools scoped to `current_user.id`. Extend tools: leave balance, apply leave (draft only), attendance summary, payslip list, policy RAG. Apply-leave and check-in as **draft + confirm** in UI, not silent writes, until human-approval framework is live.
+`POST /api/v1/ai/chat` requires `ai:chat` and creates a workflow scoped to the
+authenticated employee ID. Profile, attendance, and leave tools query only that
+employee's records. Attendance tools are read-only; leave application tools
+prepare a draft, which the employee must confirm in the UI before submission.
+Policy answers use HR-uploaded documents. Report tools are only offered to
+authorized users.
 
 #### AI Leave Management Agent
 
@@ -625,24 +630,114 @@ Resumes and KYC: extract fields → employee/candidate draft → HR confirms. Ma
 
 #### Multi-agent HR workflow (LangGraph)
 
-```text
-                    ┌─────────────┐
-                    │ Supervisor  │  (intent classify + RBAC)
-                    └──────┬──────┘
-           ┌─────────┬─────┴──────┬──────────┬──────────┐
-           ▼         ▼            ▼          ▼          ▼
-        Policy     Employee    Leave      Attendance   Recruiter
-        RAG        Self-svc    Agent      Analyst      Agent
-           │         │            │          │          │
-           └─────────┴────────────┴──────────┴──────────┘
-                                 ▼
-                         Shared tool layer
-                    (RBAC, DB, S3, notifications)
-                                 ▼
-                         Guardrail + tracer
+The diagram below reflects the current implementation in `agents/`,
+`tools/`, `services/leave_policy_rag.py`, and `routers/ai_chat.py`. The
+`agents/graph.py` module assembles the workflow. The profile, attendance, leave,
+and report specialists are defined in `agents/profile.py`,
+`agents/attendance.py`, `agents/leave.py`, and `agents/reports.py`; supervisor
+prompting and routing are in `agents/supervisor.py`. Specialist agents are
+invoked by delegate tools from the LangGraph supervisor. The shared `ToolNode`
+executes those delegates; their results return to the supervisor, which can
+delegate again or finish the response.
+
+```mermaid
+flowchart TD
+    UI["Streamlit AI Assistant"] -->|POST /api/v1/ai/chat| API["FastAPI AI chat route"]
+    API --> AUTH["JWT authentication + ai:chat permission"]
+    AUTH --> FACTORY["create_employee_agent(db, authenticated employee_id)"]
+    FACTORY --> START((START))
+    START --> SUP["LangGraph supervisor<br/>LLM + available delegate tools"]
+    SUP -->|tool calls| NODE["Delegate ToolNode"]
+    NODE -->|delegate_to_employee_agent| PROFILE["Employee profile specialist"]
+    NODE -->|delegate_to_attendance_agent<br/>only with attendance:read| ATTEND["Attendance specialist"]
+    NODE -->|delegate_to_leave_agent| LEAVE["Leave and policy specialist"]
+    NODE -->|delegate_to_reports_agent<br/>only with ai:admin + report:read| REPORT["HR reports specialist"]
+
+    PROFILE -->|get_my_profile| PROFILE_TOOL["Employee profile DB tool<br/>authenticated employee only"]
+    ATTEND -->|attendance:read| ATTEND_TOOLS["get_my_attendance_history<br/>get_my_attendance_today"]
+    LEAVE --> POLICY_TOOL["search_leave_policy"]
+    LEAVE -->|leave:read| LEAVE_READ["get_my_leave_balance<br/>get_my_leave_requests"]
+    LEAVE -->|leave:create| LEAVE_DRAFT["prepare_leave_request<br/>draft only; no submission"]
+    REPORT --> REPORT_TOOL["get_report_data<br/>aggregate, date-bounded report data"]
+
+    POLICY_TOOL --> RAG["Chroma leave-policy vector store<br/>retrieved text + source metadata"]
+    REPORT_TOOL --> DATA["Permission-scoped attendance,<br/>leave, and payroll aggregates"]
+
+    PROFILE_TOOL --> RESULT["Specialist tool/agent result"]
+    ATTEND_TOOLS --> RESULT
+    LEAVE_READ --> RESULT
+    LEAVE_DRAFT --> RESULT
+    RAG --> RESULT
+    DATA --> RESULT
+
+    RESULT --> NODE
+    NODE --> SUP
+    SUP -->|no more tool calls| END((END))
+    END --> RESPONSE["ChatResponse<br/>response + optional leave draft"]
+    RESPONSE --> UI
+
+    ADMIN["HR/Admin policy upload<br/>ai:admin"] -->|POST /api/v1/ai/leave-policies| INDEX["Parse, chunk, embed, index"]
+    INDEX --> RAG
 ```
 
-Supervisor never forwards a tool the user's role cannot call. Cross-agent state lives in LangGraph checkpointer (Postgres/Redis).
+Permission gates are enforced when the workflow/tools are built and again
+inside report sections: attendance requires `attendance:read`; leave balance
+and history require `leave:read`; leave drafts require `leave:create`; payroll
+report data additionally requires `salary:read`. The report delegate is only
+offered when both `ai:admin` and `report:read` are present. Policy search is
+available to authenticated chat users, but document indexing requires
+`ai:admin`. No recruiter agent, attendance analyst agent, checkpointer, S3
+document retrieval, or shared generic tool layer is currently part of this
+workflow.
+
+#### Specialist agent-to-tool connections
+
+This focused view shows which tools each specialist agent receives. The
+supervisor calls the corresponding delegate tool; each delegate invokes its
+specialist agent, and the specialist chooses among its own tools.
+
+```mermaid
+flowchart LR
+    SUP["Supervisor LLM"]
+
+    subgraph PROFILE["Employee profile specialist"]
+        PROFILE_AGENT["Profile agent"] --> PROFILE_TOOL["get_my_profile"]
+    end
+
+    subgraph ATTENDANCE["Attendance specialist (attendance:read)"]
+        ATTEND_AGENT["Attendance agent"] --> ATTEND_HISTORY["get_my_attendance_history"]
+        ATTEND_AGENT --> ATTEND_TODAY["get_my_attendance_today"]
+    end
+
+    subgraph LEAVE["Leave and policy specialist"]
+        LEAVE_AGENT["Leave agent"] --> POLICY_SEARCH["search_leave_policy"]
+        LEAVE_AGENT --> LEAVE_BALANCE["get_my_leave_balance<br/>(leave:read)"]
+        LEAVE_AGENT --> LEAVE_HISTORY["get_my_leave_requests<br/>(leave:read)"]
+        LEAVE_AGENT --> LEAVE_DRAFT["prepare_leave_request<br/>(leave:create; draft only)"]
+    end
+
+    subgraph REPORTS["HR reports specialist (ai:admin + report:read)"]
+        REPORT_AGENT["Reports agent"] --> REPORT_DATA["get_report_data"]
+    end
+
+    SUP -->|delegate_to_employee_agent| PROFILE_AGENT
+    SUP -->|delegate_to_attendance_agent, if available| ATTEND_AGENT
+    SUP -->|delegate_to_leave_agent| LEAVE_AGENT
+    SUP -->|delegate_to_reports_agent, if available| REPORT_AGENT
+
+    PROFILE_TOOL --> EMPLOYEE_DB[("Employee DB<br/>authenticated employee only")]
+    ATTEND_HISTORY --> ATTENDANCE_DB[("Attendance DB<br/>authenticated employee only")]
+    ATTEND_TODAY --> ATTENDANCE_DB
+    LEAVE_BALANCE --> EMPLOYEE_DB
+    LEAVE_HISTORY --> LEAVE_DB[("Leave DB<br/>authenticated employee only")]
+    LEAVE_DRAFT --> DRAFT["Return draft to chat UI<br/>employee confirms submission"]
+    POLICY_SEARCH --> POLICY_STORE[("Chroma leave-policy store")]
+    REPORT_DATA --> REPORT_DB[("Permission-scoped aggregates<br/>attendance / leave / payroll")]
+```
+
+`get_report_data` checks permissions per report category; payroll additionally
+requires `salary:read`. The report delegate is only registered when
+`ai:admin` and `report:read` are both granted.
 
 #### AI-generated reports
 

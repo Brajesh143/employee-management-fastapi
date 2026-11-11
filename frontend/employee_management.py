@@ -246,6 +246,10 @@ def _render_hire_employee(api_request: ApiRequest) -> None:
 
 def _render_employee_documents(api_request: ApiRequest) -> None:
     st.subheader("Employee documents")
+    st.caption(
+        "AI classification and summaries are available for text-based PDFs. "
+        "Scanned PDFs and images are not supported."
+    )
     employee_id = st.number_input(
         "Employee ID",
         min_value=1,
@@ -288,6 +292,7 @@ def _render_employee_documents(api_request: ApiRequest) -> None:
             if documents:
                 for document in documents:
                     download_key = f"employee_document_content_{document['id']}"
+                    analysis_key = f"employee_document_analysis_{document['id']}"
                     if st.button(
                         f"Prepare {document['file_name']}",
                         key=f"prepare_document_{document['id']}",
@@ -308,6 +313,28 @@ def _render_employee_documents(api_request: ApiRequest) -> None:
                             mime=document["content_type"],
                             key=f"download_employee_document_{document['id']}",
                         )
+                    if document["content_type"] == "application/pdf":
+                        if st.button(
+                            f"Analyze {document['file_name']} with AI",
+                            key=f"analyze_employee_document_{document['id']}",
+                        ):
+                            analysis = api_request(
+                                "POST",
+                                f"/employees/documents/{document['id']}/ai-analysis",
+                            )
+                            if analysis is not None:
+                                st.session_state[analysis_key] = analysis
+                    analysis = st.session_state.get(analysis_key)
+                    if analysis is not None:
+                        with st.expander(
+                            f"AI analysis: {document['file_name']}"
+                        ):
+                            if analysis["source_text_truncated"]:
+                                st.info(
+                                    "Only the first portion of the PDF was "
+                                    "analyzed."
+                                )
+                            st.text(analysis["analysis"])
             elif documents is not None:
                 st.info("No documents uploaded for this employee.")
 

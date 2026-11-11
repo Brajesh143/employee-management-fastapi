@@ -16,6 +16,9 @@ from crud.auth import change_password, login_employee, revoke_access_token
 from database import get_db
 from database.database import Base
 from models.employee import Employee
+from models.permission import Permission
+from models.role import Role
+from models.role_permission import RolePermission
 from schemas.auth import ChangePassword, LoginRequest
 
 
@@ -190,6 +193,49 @@ def test_logout_endpoint_revokes_token_for_following_requests(
             assert "password_hash" not in current_user_response.json()
             assert client.post("/auth/logout", headers=headers).status_code == 204
             assert client.get("/auth/me", headers=headers).status_code == 401
+    finally:
+        main.app.dependency_overrides.pop(get_db, None)
+
+
+def test_current_employee_permissions_endpoint(
+    auth_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("JWT_SECRET_KEY", "f" * 64)
+    role = Role(name="AI Admin")
+    permission = Permission(name="ai:admin", description="Manage AI")
+    employee = Employee(
+        employee_code="AUTH005",
+        first_name="Auth",
+        last_name="Permissions",
+        email="permissions@example.com",
+        password_hash=Hash.hash_password("correct horse battery"),
+        role=role,
+        is_active=True,
+    )
+    auth_db.add_all([role, permission, employee])
+    auth_db.flush()
+    auth_db.add(
+        RolePermission(role_id=role.id, permission_id=permission.id)
+    )
+    auth_db.commit()
+    token = JWTHandler.create_access_token(
+        {"sub": str(employee.id), "ver": employee.token_version}
+    )
+
+    def override_get_db():
+        with Session(auth_db.get_bind()) as request_db:
+            yield request_db
+
+    main.app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(main.app) as client:
+            response = client.get(
+                "/auth/me/permissions",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert response.status_code == 200, response.text
+        assert response.json() == ["ai:admin"]
     finally:
         main.app.dependency_overrides.pop(get_db, None)
 

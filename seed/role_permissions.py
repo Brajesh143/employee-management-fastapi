@@ -30,6 +30,7 @@ ROLE_PERMISSIONS = {
         "role:update",
         "role:delete",
         "role:assign",
+        "ai:admin",
 
         "attendance:create",
         "attendance:manage",
@@ -82,6 +83,7 @@ ROLE_PERMISSIONS = {
         "employee:import",
         "employee:export",
         "document:manage",
+        "ai:admin",
 
         "department:read",
 
