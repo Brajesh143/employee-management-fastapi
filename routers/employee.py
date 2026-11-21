@@ -1,5 +1,4 @@
 from datetime import date
-import logging
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
@@ -16,7 +15,6 @@ from models.employee import Employee
 from schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeResponse
 from schemas.employee_csv import EmployeeImportPreview
 from schemas.employee_document import EmployeeDocumentResponse
-from schemas.employee_document import EmployeeDocumentAIAnalysisResponse
 from schemas.employee_exit import EmployeeExitRequest
 from database import get_db
 from crud import employee as crud
@@ -36,7 +34,6 @@ from services.employee_document_storage import get_document_storage
 from services.audit import write_audit_log
 
 router = APIRouter()
-logger = logging.getLogger("ai_document_processing")
 
 
 def _scope_to_reporting_team(
@@ -44,6 +41,8 @@ def _scope_to_reporting_team(
     current_user: Employee,
     reporting_manager_id: int | None,
 ) -> int | None:
+    if has_permission(db, current_user, "employee:read:all"):
+        return reporting_manager_id
     if not has_permission(db, current_user, "employee:team:read"):
         return reporting_manager_id
     if reporting_manager_id not in (None, current_user.id):
@@ -297,44 +296,6 @@ def download_employee_document(
             "Content-Length": str(document.file_size),
         },
     )
-
-
-@router.post(
-    "/documents/{document_id}/ai-analysis",
-    response_model=EmployeeDocumentAIAnalysisResponse,
-    dependencies=[Depends(require_permission("document:manage"))],
-)
-def analyze_employee_document_api(
-    document_id: int,
-    db: Session = Depends(get_db),
-):
-    document = get_employee_document(db, document_id)
-    if document is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if document.content_type != "application/pdf":
-        raise HTTPException(
-            status_code=415,
-            detail="AI analysis currently supports PDF documents only.",
-        )
-
-    try:
-        return analyze_employee_document(document, get_document_storage())
-    except FileNotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail="Document file not found",
-        ) from error
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    except Exception as error:
-        logger.exception(
-            "AI_DOCUMENT_ANALYSIS_FAILED | document_id=%s",
-            document_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to analyze the employee document.",
-        ) from error
 
 
 @router.post(

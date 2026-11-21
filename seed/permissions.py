@@ -248,15 +248,7 @@ DEFAULT_PERMISSIONS = [
         "description": "View team reports"
     },
 
-    # AI, audit, notifications, and system administration
-    {
-        "name": "ai:chat",
-        "description": "Use self-service AI chat"
-    },
-    {
-        "name": "ai:admin",
-        "description": "Administer AI features and configuration"
-    },
+    # Audit, notifications, and system administration
     {
         "name": "audit:read",
         "description": "View audit logs"

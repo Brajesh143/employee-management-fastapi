@@ -14,7 +14,7 @@ def setup_logging():
     formatter = logging.Formatter(log_format)
 
     file_handler = RotatingFileHandler(
-        "logs/agent.log",
+        "logs/application.log",
         maxBytes=5 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8",

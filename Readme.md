@@ -20,60 +20,6 @@ Tables:
     Leave
     Salary
 
-Phase 2: Add AI Features
-
-For example:
-
-    Feature 1: Employee Profile Summary ⭐⭐⭐⭐⭐
-
-        Input
-            Name:
-            Experience:
-            Skills:
-            Projects:
-            Department:
-
-        AI Output
-
-        Brajesh is a Senior MERN Developer with 8 years of experience.
-        He specializes in React, Node.js, FastAPI, LangChain and AI applications.
-
-    Feature 2: Job Description Generator
-
-        Input
-
-            Role = Python Developer
-            Experience = 4 Years
-
-        Output
-
-            Generate professional Job Description
-
-    Feature 3: Email Generator
-        
-        Input
-
-            Leave Approved
-
-        Output
-
-            Generate approval email
-
-    Feature 4: Performance Review
-        
-        Input
-
-            Projects Completed
-            Attendance
-            Rating
-
-        Output
-
-            Generate professional performance review.
-
-AI Models: ollama pull gemma3:4b
-
-
 Employee:
 
     Permissions: Able to see dahboard, with (attendance, leave balance, salary and profile), Able to see the attendenc and create attendance, able to see all leaves and create leaves
@@ -141,6 +87,10 @@ employee directory and CSV export, employee hire/manager/designation assignment,
 document upload and download, CSV import dry-run preview, designation
 management, and soft-exit recording. Access to each action is enforced by the
 backend role permissions.
+
+The dashboard loads employee, attendance, pending leave, and department
+statistics from `GET /dashboard/summary`; each statistic is scoped to the
+signed-in user's permissions.
 
 Permission catalog administration is available under `/permissions` and
 requires `permission:manage`. Role permission assignments can be inspected with

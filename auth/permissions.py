@@ -11,7 +11,6 @@ from models.permission import Permission
 from models.role import Role
 
 SELF_SERVICE_PERMISSIONS = {
-    "ai:chat",
     "attendance:create",
     "attendance:read",
     "leave:create",

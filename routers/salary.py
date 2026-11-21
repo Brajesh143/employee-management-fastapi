@@ -128,7 +128,6 @@ def get_employee_salary(
         month=month,
     )
 
-
 @router.get(
     "/{salary_id}/payslip",
     response_model=PayslipResponse,

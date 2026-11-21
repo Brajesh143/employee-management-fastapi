@@ -201,6 +201,23 @@ def dashboard_page():
     st.title("📊 Dashboard")
     st.caption("Employee Management System overview")
 
+    summary = api_request("GET", "/dashboard/summary")
+    if summary is None:
+        return
+
+    col1, col2, col3, col4 = st.columns(4)
+    metrics = (
+        (col1, "Active Employees", summary["employees"]),
+        (col2, "Present Today", summary["present_today"]),
+        (col3, "Pending Leaves", summary["pending_leaves"]),
+        (col4, "Active Departments", summary["departments"]),
+    )
+    for column, label, value in metrics:
+        column.metric(label, value if value is not None else "—")
+
+    if any(value is None for _, _, value in metrics):
+        st.caption("Some statistics are hidden based on your permissions.")
+
     permissions = set(st.session_state.permissions or [])
     if not permissions.intersection(
         {"*", "report:read", "report:team:read"}
@@ -1505,6 +1522,7 @@ def salary_page():
     has_all_permissions = "*" in permissions
     can_read_payroll = has_all_permissions or "salary:read" in permissions
     can_read_payslips = has_all_permissions or "payslip:read" in permissions
+    can_create_salary = has_all_permissions or "salary:create" in permissions
     can_manage_structure = has_all_permissions or "salary:create" in permissions
     can_generate_payroll = has_all_permissions or "payroll:generate" in permissions
     can_create_expense = has_all_permissions or "expense:create" in permissions
@@ -1524,6 +1542,8 @@ def salary_page():
     tab_names = []
     if can_read_payroll or can_read_payslips:
         tab_names.append("Payslips")
+    if can_create_salary:
+        tab_names.append("Create Salary")
     if can_manage_structure:
         tab_names.append("Salary structures")
     if can_generate_payroll:
@@ -1946,150 +1966,90 @@ def salary_page():
                                 st.success("Reimbursement marked as paid.")
                                 st.rerun()
 
-# ---------------- AI ASSISTANT ----------------
-
-def ai_assistant_page():
-    st.title("🤖 AI Employee Assistant")
-
-    st.caption(
-        "Ask about your attendance history and today's status, leave balance, "
-        "leave requests, or employee information. Leave applications are "
-        "submitted only after you confirm the prepared draft."
-    )
-
-    permissions = st.session_state.get("permissions")
-    if permissions is None:
-        permissions = api_request("GET", "/auth/me/permissions") or []
-        st.session_state.permissions = permissions
-    permissions = set(permissions)
-    if permissions.intersection({"*", "ai:admin"}):
-        with st.expander("Upload leave policy", expanded=False):
-            st.caption(
-                "Upload an authoritative PDF, Markdown, or UTF-8 text policy. "
-                "The document is indexed locally for leave-policy answers."
-            )
-            with st.form("leave_policy_upload_form"):
-                policy_file = st.file_uploader(
-                    "Policy document",
-                    type=["pdf", "md", "txt"],
+    if "Create Salary" in tabs:
+        with tabs["Create Salary"]:
+            st.subheader("Create employee salary")
+            with st.form("create_salary_form"):
+                salary_employee_id = st.number_input(
+                    "Employee ID",
+                    min_value=1,
+                    step=1,
+                    key="create_salary_employee_id",
                 )
-                upload_policy = st.form_submit_button(
-                    "Index leave policy",
+                month_columns = st.columns(2)
+                month = month_columns[0].number_input(
+                    "Salary month",
+                    min_value=1,
+                    max_value=12,
+                    value=date.today().month,
+                    step=1,
+                )
+                year = month_columns[1].number_input(
+                    "Salary year",
+                    min_value=2000,
+                    max_value=2200,
+                    value=date.today().year,
+                    step=1,
+                )
+                basic_salary = st.number_input(
+                    "Basic salary", min_value=0.0, step=100.0, format="%.2f"
+                )
+                hra = st.number_input(
+                    "HRA", min_value=0.0, step=100.0, format="%.2f"
+                )
+                allowance = st.number_input(
+                    "Allowance", min_value=0.0, step=100.0, format="%.2f"
+                )
+                bonus = st.number_input(
+                    "Bonus", min_value=0.0, step=100.0, format="%.2f"
+                )
+                deduction = st.number_input(
+                    "Deduction", min_value=0.0, step=100.0, format="%.2f"
+                )
+                tax = st.number_input(
+                    "Tax", min_value=0.0, step=100.0, format="%.2f"
+                )
+                payment_status = st.selectbox(
+                    "Payment status", ["Pending", "Paid"]
+                )
+                payment_date = (
+                    st.date_input("Payment date", value=date.today())
+                    if payment_status == "Paid"
+                    else None
+                )
+                salary_submitted = st.form_submit_button(
+                    "Create salary",
                     type="primary",
                 )
-            if upload_policy:
-                if policy_file is None:
-                    st.warning("Choose a policy file to upload.")
-                else:
-                    result = api_request(
-                        "POST",
-                        "/api/v1/ai/leave-policies",
-                        files={
-                            "file": (
-                                policy_file.name,
-                                policy_file.getvalue(),
-                                policy_file.type or "application/octet-stream",
-                            )
-                        },
-                    )
-                    if result is not None:
-                        st.success(
-                            f"Indexed {result['file_name']} into "
-                            f"{result['chunks_indexed']} searchable sections."
-                        )
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    if "pending_leave_draft" not in st.session_state:
-        st.session_state.pending_leave_draft = None
-
-    for message in st.session_state.chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    prompt = st.chat_input("Ask your question...")
-
-    if prompt:
-        st.session_state.chat_history.append({
-            "role": "user",
-            "content": prompt,
-        })
-
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+            if salary_submitted:
                 result = api_request(
                     "POST",
-                    "/api/v1/ai/chat",
-                    json={"message": prompt},
+                    "/salaries/",
+                    json={
+                        "employee_id": int(salary_employee_id),
+                        "month": int(month),
+                        "year": int(year),
+                        "basic_salary": basic_salary,
+                        "hra": hra,
+                        "allowance": allowance,
+                        "bonus": bonus,
+                        "deduction": deduction,
+                        "tax": tax,
+                        "payment_status": payment_status,
+                        "payment_date": (
+                            payment_date.isoformat()
+                            if payment_date is not None
+                            else None
+                        ),
+                    },
                 )
-
                 if result is not None:
-                    answer = result.get(
-                        "response",
-                        result.get("answer", "No response received."),
+                    st.success(
+                        f"Created salary record #{result['id']} for employee "
+                        f"#{result['employee_id']}."
                     )
-                    if result.get("leave_draft"):
-                        st.session_state.pending_leave_draft = result[
-                            "leave_draft"
-                        ]
-                else:
-                    answer = "Unable to get a response from the AI assistant."
-
-                st.markdown(answer)
-
-        st.session_state.chat_history.append({
-            "role": "assistant",
-            "content": answer,
-        })
-
-    draft = st.session_state.pending_leave_draft
-    if draft:
-        st.subheader("Review leave request")
-        st.write(f"**Type:** {draft['leave_type']}")
-        st.write(
-            f"**Dates:** {draft['start_date']} to {draft['end_date']} "
-            f"({draft['total_days']} calendar days)"
-        )
-        st.write(f"**Reason:** {draft['reason']}")
-        st.caption(
-            "This is a draft. It will be sent for human review only after "
-            "you confirm."
-        )
-        confirm_column, discard_column = st.columns(2)
-        if confirm_column.button(
-            "Confirm and submit",
-            type="primary",
-            key="confirm_ai_leave_request",
-        ):
-            employee = st.session_state.user or {}
-            result = api_request(
-                "POST",
-                "/leaves/",
-                json={
-                    "employee_id": employee.get("id"),
-                    "leave_type": draft["leave_type"],
-                    "start_date": f"{draft['start_date']}T00:00:00",
-                    "end_date": f"{draft['end_date']}T00:00:00",
-                    "reason": draft["reason"],
-                },
-            )
-            if result is not None:
-                st.session_state.pending_leave_draft = None
-                st.success(
-                    f"Leave request submitted. Request ID: {result['id']}."
-                )
-                st.rerun()
-        if discard_column.button(
-            "Discard draft",
-            key="discard_ai_leave_request",
-        ):
-            st.session_state.pending_leave_draft = None
-            st.info("Leave request draft discarded.")
-            st.rerun()
-
+                    st.rerun()
 
 def performance_recruitment_page():
     st.title("📈 Performance & Recruitment")
@@ -2657,7 +2617,6 @@ def main():
             "Dashboard",
             "Employees",
             "Salary Management",
-            "AI Assistant",
             "Change password",
         ]
         if current_permissions.intersection(
@@ -2716,7 +2675,6 @@ def main():
             st.session_state.token = None
             st.session_state.user = None
             st.session_state.permissions = []
-            st.session_state.chat_history = []
             st.rerun()
 
     if page == "Dashboard":
@@ -2735,8 +2693,6 @@ def main():
         salary_page()
     elif page == "Performance & Recruitment":
         performance_recruitment_page()
-    elif page == "AI Assistant":
-        ai_assistant_page()
     elif page == "Change password":
         change_password_page()
 
