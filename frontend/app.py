@@ -7,6 +7,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+from frontend.chatbot import render_chatbot
 from employee_management import render_employee_management
 
 load_dotenv()
@@ -144,6 +145,7 @@ def login_page():
                 st.session_state.permissions = (
                     api_request("GET", "/auth/me/permissions") or []
                 )
+                st.session_state.chatbot_messages = []
 
                 st.rerun()
 
@@ -2615,6 +2617,7 @@ def main():
         current_permissions = set(st.session_state.permissions)
         page_options = [
             "Dashboard",
+            "AI Chatbot",
             "Employees",
             "Salary Management",
             "Change password",
@@ -2675,10 +2678,13 @@ def main():
             st.session_state.token = None
             st.session_state.user = None
             st.session_state.permissions = []
+            st.session_state.chatbot_messages = []
             st.rerun()
 
     if page == "Dashboard":
         dashboard_page()
+    elif page == "AI Chatbot":
+        render_chatbot(api_request)
     elif page == "Employees":
         employees_page()
     elif page == "Permission management":

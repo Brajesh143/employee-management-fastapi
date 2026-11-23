@@ -52,6 +52,27 @@ New passwords are stored with bcrypt. Existing salted SHA-256 password hashes
 for passwords up to 72 UTF-8 bytes are upgraded to bcrypt on successful login;
 longer legacy passwords remain verifiable until changed.
 
+The **AI Chatbot** page uses the employee agent through the authenticated
+`POST /chatbot/chat` endpoint and a local Ollama server. Install and start
+Ollama, then pull a tool-capable model:
+
+```bash
+ollama pull qwen2.5:3b
+```
+
+The default model is `qwen2.5:3b`; override it with `OLLAMA_MODEL`. Set
+`OLLAMA_BASE_URL` if Ollama is running at a non-default URL
+(`http://localhost:11434`).
+
+The endpoint accepts up to 20 user/assistant messages (4,000 characters
+each). The agent can use employee-list and single-employee tools, which
+enforce the signed-in user's employee permissions and visibility scope. Tool
+output is limited to employee code, name, department, designation, and status.
+Chat history is supplied by the client and is not stored in the employee
+database. The conversation and any employee-tool results used to answer it
+are sent to the configured Ollama server. Use a trusted Ollama server when
+setting a remote `OLLAMA_BASE_URL`.
+
 To completely reset employee and role seed data, run this destructive command
 from the repository root:
 

@@ -577,28 +577,32 @@ All report queries go through indexed aggregates or materialized daily snapshots
 
 ---
 
-### 5.9 AI-Powered Features (future design)
+### 5.9 AI-Powered Features
 
-AI chat, agent/tool workflows, RAG, and AI document analysis have been removed
-from the current application. The following subsections describe possible
-future work only.
+The authenticated employee chat workflow is implemented with LangGraph and
+Ollama. RAG, AI document analysis, and additional HR workflows remain future
+work.
 
-#### Shared AI request flow
+#### Current employee assistant workflow
 
 ```text
-User message
-  → Auth + ai:chat permission
-  → Rate limit
-  → Prompt-injection + PII scan (input)
-  → Router / LangGraph supervisor
-  → Retrieve context (RAG and/or DB tools)
-  → Tool calls always pass employee_id from JWT, never from the prompt
-  → Output validation + PII mask
-  → Trace (tokens, latency, cost)
-  → Response + optional human-approval ticket
+Streamlit
+  → POST /chatbot/chat + JWT authentication
+  → create_employee_agent(db, authenticated employee)
+  → EmployeeAgentState(messages)
+  → assistant node (Ollama)
+  → tools edge → EmployeeTool / ToolNode → assistant node
+  → end edge → ChatResponse
 ```
 
-#### HR Policy Chatbot (RAG)
+The state, assistant node, routing edge, and workflow builder are defined in
+`agents/employee_state.py`, `agents/employee_nodes.py`,
+`agents/employee_edges.py`, and `agents/employee_workflow.py`. Employee tools
+enforce the authenticated user's employee-read permissions and visibility
+scope. The graph has no checkpointer; conversation history is provided by the
+client for each request.
+
+#### HR Policy Chatbot (future RAG)
 
 ```text
 Ingest: HR uploads PDF/MD → S3 → chunk → embed → Chroma/pgvector
@@ -607,12 +611,6 @@ Eval: faithfulness, context precision (Ragas) on a golden set
 ```
 
 If retrieval is empty: refuse rather than guess.
-
-#### Former Employee Self-Service Assistant (removed)
-
-The former AI chat and agent/tool integrations have been removed. No AI chat,
-policy retrieval, report-agent, or AI document-analysis endpoints are
-currently exposed.
 
 #### AI Leave Management Agent
 
@@ -631,13 +629,13 @@ Resumes and KYC: extract fields → employee/candidate draft → HR confirms. Ma
 
 #### Proposed multi-agent HR workflow (LangGraph)
 
-The diagram below is a target design, not current implementation. Agent,
-workflow, and tool modules are not present in the application.
+The diagram below remains a target design for a future multi-agent extension;
+the current implementation is a single employee assistant workflow.
 
 ```mermaid
 flowchart TD
-    UI["Streamlit AI Assistant"] -->|POST /api/v1/ai/chat| API["FastAPI AI chat route"]
-    API --> AUTH["JWT authentication + ai:chat permission"]
+    UI["Streamlit AI Assistant"] -->|POST /chatbot/chat| API["FastAPI AI chat route"]
+    API --> AUTH["JWT authentication"]
     AUTH --> FACTORY["create_employee_agent(db, authenticated employee_id)"]
     FACTORY --> START((START))
     START --> SUP["LangGraph supervisor<br/>LLM + available delegate tools"]

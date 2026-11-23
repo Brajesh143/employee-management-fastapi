@@ -28,6 +28,7 @@ from routers import (
     expense,
     performance,
     recruitment,
+    chatbot,
 )
 from models.shift import Shift  # noqa: F401
 from models.holiday import Holiday  # noqa: F401
@@ -155,3 +156,5 @@ app.include_router(
     prefix="/notifications",
     tags=["Notifications"]
 )
+
+app.include_router(chatbot.router)
