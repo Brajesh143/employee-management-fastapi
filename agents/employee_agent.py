@@ -1,17 +1,28 @@
-from collections.abc import Sequence
-
 from httpx import HTTPError
+from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.tools import BaseTool
 from langgraph.errors import GraphRecursionError
 from ollama import ResponseError
 from sqlalchemy.orm import Session
 
-from agents.employee_workflow import create_employee_workflow
 from agents.llm import get_llm
 from models.employee import Employee
 from schemas.chatbot import ChatMessage
 from tools.EmployeeTool import EmployeeTool
+
+SYSTEM_PROMPT = """
+You are an Employee Management AI Assistant.
+
+Retrieve accurate employee information using the available tools.
+Use the appropriate tool when asked about employee details, department,
+designation, or joining date. Never invent employee information. If an
+employee is not found, clearly say so.
+
+When asked to create an employee, call the create tool to prepare a preview,
+show the complete preview to the user, and ask them to confirm. Do not call
+the tool with confirmed=true until the user confirms after seeing the preview.
+After creation, provide the generated temporary password only once.
+"""
 
 
 class EmployeeAgentProviderError(Exception):
@@ -19,9 +30,11 @@ class EmployeeAgentProviderError(Exception):
 
 
 def create_employee_agent(db: Session, current_user: Employee):
-    model = get_llm()
-    tools: Sequence[BaseTool] = EmployeeTool(db, current_user).as_tools()
-    return create_employee_workflow(model, list(tools))
+    return create_agent(
+        model=get_llm(),
+        tools=EmployeeTool(db, current_user).as_tools(),
+        system_prompt=SYSTEM_PROMPT,
+    )
 
 
 def get_employee_agent_reply(
@@ -41,7 +54,7 @@ def get_employee_agent_reply(
         )
     except (HTTPError, ResponseError, GraphRecursionError) as exc:
         raise EmployeeAgentProviderError(
-            "The employee workflow failed. Check that Ollama is running, the "
+            "The employee agent failed. Check that Ollama is running, the "
             "model is available, and the model supports tool calls."
         ) from exc
 
@@ -54,6 +67,4 @@ def get_employee_agent_reply(
         ):
             return message.content.strip()
 
-    raise EmployeeAgentProviderError(
-        "The employee agent returned no text reply."
-    )
+    raise EmployeeAgentProviderError("The employee agent returned no text reply.")

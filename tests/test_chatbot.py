@@ -6,8 +6,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
-from agents import employee_agent
-from agents.employee_edges import route_after_assistant
+from agents import assistant_agent
 from auth.dependencies import get_current_active_user
 from routers import chatbot
 from schemas.chatbot import ChatMessage, ChatRequest
@@ -18,34 +17,37 @@ def test_chat_request_requires_a_user_message_last() -> None:
         ChatRequest(messages=[ChatMessage(role="assistant", content="Hello")])
 
 
-def test_employee_agent_registers_employee_tools(
+def test_assistant_agent_registers_employee_and_attendance_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict = {}
-    monkeypatch.setattr(employee_agent, "get_llm", lambda: object())
+    monkeypatch.setattr(assistant_agent, "get_llm", lambda: object())
 
-    def fake_create_workflow(model, tools):
+    def fake_create_agent(*, model, tools, system_prompt):
         captured["model"] = model
         captured["tools"] = tools
-        return "workflow"
+        captured["system_prompt"] = system_prompt
+        return "agent"
 
-    monkeypatch.setattr(
-        employee_agent,
-        "create_employee_workflow",
-        fake_create_workflow,
-    )
+    monkeypatch.setattr(assistant_agent, "create_agent", fake_create_agent)
 
-    result = employee_agent.create_employee_agent(Mock(), Mock())
+    result = assistant_agent.create_assistant_agent(Mock(), Mock())
 
-    assert result == "workflow"
+    assert result == "agent"
     assert {tool.name for tool in captured["tools"]} == {
         "get_employees",
         "get_employee",
+        "create_employee",
+        "check_in",
+        "check_out",
+        "get_today_attendance",
+        "get_attendance_history",
     }
     assert captured["model"] is not None
+    assert captured["system_prompt"] == assistant_agent.SYSTEM_PROMPT
 
 
-def test_employee_agent_returns_final_assistant_message() -> None:
+def test_assistant_agent_returns_final_assistant_message() -> None:
     class FakeAgent:
         def invoke(self, _: dict, config: dict) -> dict:
             assert config == {"recursion_limit": 12}
@@ -60,29 +62,12 @@ def test_employee_agent_returns_final_assistant_message() -> None:
                 ]
             }
 
-    reply = employee_agent.get_employee_agent_reply(
+    reply = assistant_agent.get_assistant_agent_reply(
         FakeAgent(),
         [ChatMessage(role="user", content="Find an employee")],
     )
 
     assert reply == "Employee found."
-
-
-def test_employee_agent_routes_tool_calls_to_tools_node() -> None:
-    tool_call = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "get_employee",
-                "args": {"employee_code": "EMP001"},
-                "id": "tool-call-1",
-            }
-        ],
-    )
-    final_answer = AIMessage(content="Employee found.")
-
-    assert route_after_assistant({"messages": [tool_call]}) == "tools"
-    assert route_after_assistant({"messages": [final_answer]}) == "end"
 
 
 def test_chat_endpoint_requires_authentication() -> None:
@@ -104,10 +89,10 @@ def test_authenticated_chat_endpoint_returns_agent_reply(
     app.include_router(chatbot.router)
     app.dependency_overrides[get_current_active_user] = lambda: object()
     app.dependency_overrides[chatbot.get_db] = lambda: object()
-    monkeypatch.setattr(chatbot, "create_employee_agent", lambda *_: object())
+    monkeypatch.setattr(chatbot, "create_assistant_agent", lambda *_: object())
     monkeypatch.setattr(
         chatbot,
-        "get_employee_agent_reply",
+        "get_assistant_agent_reply",
         lambda *_: "Hello!",
     )
 
@@ -119,5 +104,6 @@ def test_authenticated_chat_endpoint_returns_agent_reply(
 
     assert response.status_code == 200
     assert response.json() == {"reply": "Hello!"}
+    assert "/chatbot/attendance" not in app.openapi()["paths"]
 
 
